@@ -72,11 +72,6 @@ for box in bbox_list:
 
     max_co, min_co = calculate_bbox_minmax(bbox_verts)
     min_co = [x+0.5 for x in min_co]
-    print(min_co)
-
-    bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.mesh.primitive_cube_add(size=1, location = min_co)
-    bpy.context.object.display_type = 'BOUNDS'
 
 #Calculate voxel points
 
@@ -85,9 +80,9 @@ def voxelcoor_cal(voxel_size,max_co,min_co):
     voxel_y = []
     voxel_z = []
 
-    x_length = abs(max_co[0]-min_co[0])
-    y_length = abs(max_co[1]-min_co[1])
-    z_length = abs(max_co[2]-min_co[2])
+    x_length = int(abs(max_co[0]-min_co[0]))
+    y_length = int(abs(max_co[1]-min_co[1]))
+    z_length = int(abs(max_co[2]-min_co[2]))
     print(x_length,y_length,z_length)
 
     step = voxel_size/2
@@ -100,17 +95,17 @@ def voxelcoor_cal(voxel_size,max_co,min_co):
 
     co = list(min_co)
     for i in range(x):
-        x_co = co[0] + step * i
+        x_co = int(co[0]) + step * i
         #print(x_co)
         voxel_x.append(x_co)
     #print(voxel_x)
 
     for j in range(y):
-        y_co = co[1] + step * j
+        y_co = int(co[1]) + step * j
         voxel_y.append(y_co)
 
     for k in range(z):
-        z_co = co[2] + step * k
+        z_co = int(co[2]) + step * k
         voxel_z.append(z_co)
 
     def ndmesh(*xi, **kwargs):
@@ -141,13 +136,13 @@ def voxelcoor_cal(voxel_size,max_co,min_co):
     grids = np.vstack((ndmesh(nx, ny, nz))).reshape(3, -1).T
     return grids
 
-girds = voxelcoor_cal(10,max_co=max_co,min_co=min_co)
-print(girds,type(girds))
+girds = voxelcoor_cal(2,max_co=max_co,min_co=min_co)
+print(max_co,min_co,girds,type(girds))
 
 # open the file in the write mode
 save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/"
 os.makedirs(save_path, exist_ok=True)
-file_name = os.path.join(save_path, "grids.npy")
+file_name = os.path.join(save_path, "grids1.npy")
 np.save(file_name, girds)
 
 '''

@@ -24,6 +24,7 @@ import glob
 import time
 start_time = time.time()
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 # open the file in the write mode
 save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/"
@@ -75,6 +76,13 @@ def setupCamera(scene, c):
     return
 '''
 
+
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
+
 def CameraCone(cam, scn):
     matrix = cam.matrix_world
     matrix = matrix.inverted()
@@ -110,10 +118,9 @@ def isVisible(cam_mat, half_plane_normals, loc, fudge=0):
         z2 = loc2.dot(norm)
         if z2 < -fudge:
             return False
-
     return True
 
-def in_cam(voxel_co, cam, half):
+def inPTZcam_frustum(voxel_co, cam, half):
     in_view = []
     matrix = cam.matrix_world
     matrix = matrix.inverted()
@@ -121,33 +128,62 @@ def in_cam(voxel_co, cam, half):
     for co in voxel_co:
         co = Vector(co)
         result = isVisible(cam_mat=matrix, half_plane_normals=half, loc=co, fudge=0)
-
         if result == True:
             in_view.append(co)
-            '''
-            bpy.ops.mesh.primitive_cube_add(size=5, location=co)
-            bpy.context.object.display_type = 'BOUNDS'
-            # my_coll.objects.link(obj)
-            '''
-    # print(type(in_view), len(in_view))
     return in_view
 
-def visual_in_cam(voxel_co, cam, half):
+def in360cam_frustum(voxel_co, cam, cam_far):
     in_view = []
-    matrix = cam.matrix_world
-    matrix = matrix.inverted()
-    # far = cam.data.clip_end
     for co in voxel_co:
         co = Vector(co)
-        result = isVisible(cam_mat=matrix, half_plane_normals=half, loc=co, fudge=0)
-
-        if result == True:
+        loc = cam.location
+        dst = np.sqrt((co[0] - loc.x) ** 2 + (co[1] - loc.y) ** 2 + (co[1] - loc.z) ** 2)
+        if dst <= cam_far:
             in_view.append(co)
             bpy.ops.mesh.primitive_cube_add(size=5, location=co)
             bpy.context.object.display_type = 'BOUNDS'
             # my_coll.objects.link(obj)
     # print(type(in_view), len(in_view))
     return in_view
+
+def inlidar_frustum(voxel_co, cam, cam_far, lidar_fov):
+    in_view = []
+    fov_vec = np.sin(np.radians(lidar_fov))
+
+    bpy.context.context.objects.active = cam
+    bpy.ops.object.mode_set(mode='OBJECT')
+    print(bpy.context.mode)
+
+    #cam_BVHT = BVHTree.FromObject(cam, bpy.context.evaluated_depsgraph_get())
+
+    for co in voxel_co:
+        co = Vector(co)
+        loc = cam.location
+        dst = np.sqrt((co[0] - loc.x) ** 2 + (co[1] - loc.y) ** 2 + (co[1] - loc.z) ** 2)
+
+        v3 = loc - co
+        norm = normalize(v3)
+
+        if dst <= cam_far:
+            if norm[2] <= fov_vec and norm[2] >= -fov_vec:
+                local_cam = cam.matrix_world.inverted() #@ cam.location
+                local_voxel = cam.matrix_world.inverted() #@ co
+                dir = local_voxel - local_cam
+                print(local_cam, dir)
+                #location, normal, index, dist = cam_BVHT.ray_cast(local_cam, dir, dst)
+                #(location, normal, index) = cam.ray_cast(local_cam, local_voxel)
+                #print(location, normal, index, dist)
+                #print(-fov_vec,"<=",norm[2],"<=",fov_vec)
+
+                #if (location == None):
+                #    in_view.append(co)
+                #    bpy.ops.mesh.primitive_cube_add(size=2, location=location)
+                #    bpy.context.object.display_type = 'BOUNDS'
+                #    #my_coll.objects.link(obj)
+
+    # print(type(in_view), len(in_view))
+    return in_view
+
 '''
 def fitness_func(solution, solution_idx):
     # pass to blender
@@ -307,7 +343,9 @@ for i in range(len(cam_list)):
     half_normals = CameraCone(cam, scene)
     girds = grids
     #
-    inview_co = visual_in_cam(girds, cam, half_normals)
+    #inPTZview_co = inPTZcam_frustum(girds, cam, half_normals)
+    #in360view_co = in360cam_frustum(girds,cam,15)
+    inlidar_frustum(girds,cam,30,5)
 '''
 print("Parameters of the best solution : {solution}".format(solution=solution))
 print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
@@ -399,3 +437,4 @@ if path not in sys.path:
         coverage = int(100 * (matched_num / expected_num))
         coverage_list.append(coverage)
 '''
+print("done")
