@@ -4,6 +4,7 @@ import os
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+import open3d as o3d
 
 # reset materials
 def material_reset():
@@ -59,9 +60,9 @@ def voxelcoor_cal(voxel_size):
             co_world = wmtx @ v.co
             bbox_verts.append(co_world)
 
-        x_list = []
-        y_list = []
-        z_list = []
+    x_list = []
+    y_list = []
+    z_list = []
 
     def calculate_bbox_minmax(list):
         for i in range(len(list)):
@@ -83,15 +84,17 @@ def voxelcoor_cal(voxel_size):
         return max_co, min_co
 
     max_co, min_co = calculate_bbox_minmax(bbox_verts)
-    min_co = [x + 0.5 for x in min_co]
-
+    print(max_co, min_co)
+    max_co = [int(x + 5) for x in max_co]
+    min_co = [int(x - 5) for x in min_co]
+    print(max_co, min_co)
     voxel_x = []
     voxel_y = []
     voxel_z = []
 
-    x_length = int(abs(max_co[0]-min_co[0]))
-    y_length = int(abs(max_co[1]-min_co[1]))
-    z_length = int(abs(max_co[2]-min_co[2]))
+    x_length = abs(max_co[0]-min_co[0])
+    y_length = abs(max_co[1]-min_co[1])
+    z_length = abs(max_co[2]-min_co[2])
     print(x_length,y_length,z_length)
 
     step = voxel_size/2
@@ -117,36 +120,25 @@ def voxelcoor_cal(voxel_size):
         z_co = int(co[2]) + step * k
         voxel_z.append(z_co)
 
-    def ndmesh(*xi, **kwargs):
-        if len(xi) < 2:
-            msg = 'meshgrid() takes 2 or more arguments (%d given)' % int(len(xi) > 0)
-            raise ValueError(msg)
-
-        args = np.atleast_1d(*xi)
-        ndim = len(args)
-        copy_ = kwargs.get('copy', True)
-
-        s0 = (1,) * ndim
-        output = [x.reshape(s0[:i] + (-1,) + s0[i + 1::]) for i, x in enumerate(args)]
-
-        shape = [x.size for x in output]
-
-        # Return the full N-D matrix (not only the 1-D vector)
-        if copy_:
-            mult_fact = np.ones(shape, dtype=int)
-            return [x * mult_fact for x in output]
-        else:
-            return np.broadcast_arrays(*output)
     nx = np.array(voxel_x)
     ny = np.array(voxel_y)
     nz = np.array(voxel_z)
 
     #print(nx,ny,nz)
-    grids = np.vstack((ndmesh(nx, ny, nz))).reshape(3, -1).T
+    grids = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
+    print(grids, type(grids))
+    print(f'grid of {grids.size} generated')
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    for box in bbox_list:
+        bpy.data.objects[str(box.name)].select_set(True)
+    bpy.ops.object.delete()
     return grids
 
 def join_objects_and_undo():
     scene = bpy.context.scene
+    depsgraph = bpy.context.evaluated_depsgraph_get()
 
     obs = []
     for ob in scene.objects:
@@ -159,29 +151,86 @@ def join_objects_and_undo():
     # one of the objects to join
     ctx['active_object'] = obs[0]
     ctx['selected_editable_objects'] = obs
-    bpy.ops.object.join(ctx)
+    joined = bpy.ops.object.join(ctx)
     print(f'{len(obs)} objects joined')
 
-def filter_voxels(grids):
+    tree = []
+    for obj in scene.objects:
+        if obj.type == 'MESH':
+            bvhtree = BVHTree.FromObject(obj, depsgraph, epsilon=0.0001)
+            tree.append(bvhtree)
+
+    print('bvhtree obtained')
+    #bpy.ops.ed.undo()
+    print('action undone')
+    return tree[0]
+
+def filter_voxels(grids, bvhtree, reso):
     context = bpy.context
     scene = context.scene
+
+    filtered_co = []
+    #filtered_y = []
+    #filtered_z = []
+
+    for index, co in enumerate(grids):
+        #lcoation, normal, index, dist =
+        result = bvhtree.find_nearest(co, reso / 2)
+        print(result)
+        if result[0]:
+            filtered_co.append(co)
+
+    print(f'filtered_grid of {grids.size} generated')
+
+    fnx = np.array(filtered_co)
+    #fny = np.array(filtered_y)
+    #fnz = np.array(filtered_z)
+
+    # print(nx,ny,nz)
+    fgrids = np.vstack(fnx)#.reshape(3, -1).T
     '''
-    for co in grids:
-        bvhtree
+    for index, co in enumerate(fgrids):
+        me = bpy.data.meshes.new(f'line{co}')
+        xyz4, xyz5, xyz6 = co
+        me.from_pydata([(xyz4, xyz5, xyz6)], [], [])
+        me.update()
+        print(f'mesh created',index,'/',len(fgrids))
+        new_object = bpy.data.objects.new(f'line', me)
+        bpy.data.collections['new_collection'].objects.link(new_object)
     '''
+    print(fgrids, type(fgrids))
+    print(f'grid of {fgrids.size} generated')
+
+    return fgrids
 
 if __name__ == "__main__":
     # material_reset()
-    #girds = voxelcoor_cal(2)
-    #print(girds, type(girds))
+    reso = 2
+    grids = voxelcoor_cal(2)
+    save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
+    os.makedirs(save_path, exist_ok=True)
+    file_name = os.path.join(save_path, "grids.npy")
+    np.save(file_name, grids)
 
-    join_objects_and_undo()
+    bvhtree = join_objects_and_undo()
+    fgrids = filter_voxels(grids,bvhtree,reso)
+
     # open the file in the write mode
     save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
     os.makedirs(save_path, exist_ok=True)
-    file_name = os.path.join(save_path, "voxel_grids.npy")
-    #np.save(file_name, girds)
+    file_name = os.path.join(save_path, "filtered_grids.npy")
+    np.save(file_name, fgrids)
+
+    # Pass numpy array to Open3D.o3d.geometry.PointCloud and visualize
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(grids)
+    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/grids.ply", pcd)
+    pcd2 = o3d.geometry.PointCloud()
+    pcd2.points = o3d.utility.Vector3dVector(fgrids)
+    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply", pcd2)
+    print('done')
 '''
+
 girds = voxelcoor_cal(1, max_co=max_co, min_co=min_co)
 print("shape=",girds,len(girds),type(girds))
 
