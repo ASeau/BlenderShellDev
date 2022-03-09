@@ -5,6 +5,7 @@ import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 import open3d as o3d
+import pickle
 
 # reset materials
 def material_reset():
@@ -127,7 +128,7 @@ def voxelcoor_cal(voxel_size):
     #print(nx,ny,nz)
     grids = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
     print(grids, type(grids))
-    print(f'grid of {grids.size} generated')
+    print(f'grid of {len(grids)} generated')
 
     bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -151,13 +152,13 @@ def join_objects_and_undo():
     # one of the objects to join
     ctx['active_object'] = obs[0]
     ctx['selected_editable_objects'] = obs
-    joined = bpy.ops.object.join(ctx)
+    bpy.ops.object.join(ctx)
     print(f'{len(obs)} objects joined')
 
     tree = []
     for obj in scene.objects:
         if obj.type == 'MESH':
-            bvhtree = BVHTree.FromObject(obj, depsgraph, epsilon=0.0001)
+            bvhtree = BVHTree.FromObject(obj, depsgraph, epsilon=0.01)
             tree.append(bvhtree)
 
     print('bvhtree obtained')
@@ -170,17 +171,16 @@ def filter_voxels(grids, bvhtree, reso):
     scene = context.scene
 
     filtered_co = []
-    #filtered_y = []
-    #filtered_z = []
-
     for index, co in enumerate(grids):
+        print(index,"/",len(grids))
         #lcoation, normal, index, dist =
         result = bvhtree.find_nearest(co, reso / 2)
-        print(result)
+        #print(result)
         if result[0]:
             filtered_co.append(co)
+            print(result)
 
-    print(f'filtered_grid of {grids.size} generated')
+    #print(f'grid of {grids.size} inputed')
 
     fnx = np.array(filtered_co)
     #fny = np.array(filtered_y)
@@ -188,47 +188,41 @@ def filter_voxels(grids, bvhtree, reso):
 
     # print(nx,ny,nz)
     fgrids = np.vstack(fnx)#.reshape(3, -1).T
-    '''
-    for index, co in enumerate(fgrids):
-        me = bpy.data.meshes.new(f'line{co}')
-        xyz4, xyz5, xyz6 = co
-        me.from_pydata([(xyz4, xyz5, xyz6)], [], [])
-        me.update()
-        print(f'mesh created',index,'/',len(fgrids))
-        new_object = bpy.data.objects.new(f'line', me)
-        bpy.data.collections['new_collection'].objects.link(new_object)
-    '''
+
     print(fgrids, type(fgrids))
-    print(f'grid of {fgrids.size} generated')
+    print(f'filtered_grid of {fgrids.size} generated')
 
     return fgrids
 
 if __name__ == "__main__":
     # material_reset()
-    reso = 2
-    grids = voxelcoor_cal(2)
+    reso = 1
+    grids = voxelcoor_cal(1)
     save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "grids.npy")
     np.save(file_name, grids)
 
-    bvhtree = join_objects_and_undo()
-    fgrids = filter_voxels(grids,bvhtree,reso)
+    # Pass numpy array to Open3D.o3d.geometry.PointCloud and visualize
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(grids)
+    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/grids.ply", pcd)
+
+    # get filtered grids from open3d mesh2voxel
+    bvhtree_1 = join_objects_and_undo()
+    f_grids = filter_voxels(grids, bvhtree_1, reso)
 
     # open the file in the write mode
     save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "filtered_grids.npy")
-    np.save(file_name, fgrids)
+    np.save(file_name, f_grids)
 
-    # Pass numpy array to Open3D.o3d.geometry.PointCloud and visualize
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(grids)
-    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/grids.ply", pcd)
     pcd2 = o3d.geometry.PointCloud()
-    pcd2.points = o3d.utility.Vector3dVector(fgrids)
-    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply", pcd2)
+    pcd2.points = o3d.utility.Vector3dVector(f_grids)
+    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply",pcd2)
     print('done')
+
 '''
 
 girds = voxelcoor_cal(1, max_co=max_co, min_co=min_co)

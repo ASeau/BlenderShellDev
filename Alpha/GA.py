@@ -4,27 +4,53 @@ import pygad
 import bpy
 import numpy as np
 import time
-
+import math
 start_time = time.time()
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+import open3d as o3d
 
 # open the file in the write mode
-
-save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/"
+save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct"
 os.makedirs(save_path, exist_ok=True)
-file_name = os.path.join(save_path, "grids.npy")
+file_name = os.path.join(save_path, "filtered_grids.npy")
 grids = np.load(file_name)
 print(grids)
 
+co_list = []
+for index, item in enumerate(grids):
+    co_list.append(index)
+
+#convert to KDtree
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(grids)
+pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
 # prepare fitness
-x_pos = 0
-x_size = {'low': -42, 'high': 18}
-y_pos = 0
-y_size = {'low': 27, 'high': 27}
-z_pos = 0
-z_size = {'low': 2, 'high': 2}
+x_size = []
+y_size = []
+z_size = []
+
+for x in range(0, bound_x, 1):
+    # if x >= 2500 or x <= :
+    x_size.append(x)
+
+for y in range(0, bound_y, 1):
+    # if y >= 500 or y >= 1500:
+    y_size.append(y)
+
+for y in range(0, bound_z, 1):
+    #if y >= 500 or y >= 1500:
+    z_size.append(y)
+
+nx = np.array(x_size)
+ny = np.array(y_size)
+nz = np.array(z_size)
+
+#print(nx,ny,nz)
+cam_loc = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
+print(cam_loc, type(cam_loc))
+print(f'grid of {cam_loc.size} generated')
 
 rot_x = 0
 rot_x_size = {'low': 90, 'high': 180}
@@ -45,7 +71,7 @@ for cam in range(cam_num):
 desired_output = 100  # Function output.
 expected_num = 999
 
-'''
+
 def setupCamera(scene, c):
     pi = math.pi
     scene.camera.rotation_euler = [0, 0, 0]
@@ -58,8 +84,6 @@ def setupCamera(scene, c):
     scene.camera.location.z = c[5]
 
     return
-'''
-
 
 def normalize(v):
     norm = np.linalg.norm(v)
@@ -133,7 +157,6 @@ def in360cam_frustum(voxel_co, cam, cam_far):
     # print(type(in_view), len(in_view))
     return in_view
 
-
 def inlidar_frustum(voxel_co, cam, cam_far, lidar_fov):
     in_view = []
     fov_vec = np.sin(np.radians(lidar_fov))
@@ -172,126 +195,109 @@ def inlidar_frustum(voxel_co, cam, cam_far, lidar_fov):
     # print(type(in_view), len(in_view))
     return in_view
 
-
-'''
-def fitness_func(solution, solution_idx):
-    # pass to blender
-    context = bpy.context
-    scene = context.scene
-    scene.frame_set(235)
-
-    cam_list = []
-    gen_fitness = []
-
-    for obj in bpy.data.objects:
-        if obj.type != "CAMERA":
-            continue
-        #print('Camera with name "' + obj.name + '" found')
-        cam_list.append(obj)
-        print(cam_list)
-
-    nested_solution = [solution[i:i + 6] for i in range(0, len(solution), 6)]
-    #defining list for whole generation
-    gen_fitness = []
-
-    for i in range(len(cam_list)):
-        cam = cam_list[i]
-        bpy.context.scene.camera = cam
-        #print('Active camera set to ' + cam.name)
-        cam_loc = cam.location
-        cam_rot = cam.rotation_euler
-        cam_roty = cam_rot[2]
-        pi = math.pi
-        rad = (pi / 180.0)
-        #print(solution,type(solution))
-
-        cam_x = nested_solution[i][0]
-        cam_y = nested_solution[i][1]
-        cam_z = nested_solution[i][2]
-        cam_rot_x = nested_solution[i][3]
-        cam_rot_y = nested_solution[i][4]
-        cam_rot_z = nested_solution[i][5]
-
-        config = list([cam_rot_x, cam_rot_y, cam_rot_z, cam_x, cam_y, cam_z])
-        #
-        setupCamera(scene=scene, c=config)
-        # voxel_cal
+def GA_optimiztion(co_list,):
+    # sol = (installable_list[index], pan, tilt)
+    def fitness_func(solution, solution_idx):
+        # pass to blender
         context = bpy.context
         scene = context.scene
-        #
-        half_normals = CameraCone(cam, scene)
-        girds = grids
-        #
-        inview_co = in_cam(girds, cam, half_normals)
-        fitness = len(inview_co)
-        print("cam,fitness",cam.name,fitness)
-        #
-        gen_fitness.append(fitness)
-    #using cam average
-    fitness = sum(gen_fitness)/len(gen_fitness)
-    return fitness
+        scene.frame_set(235)
 
-#output = numpy.sum(solution*function_inputs)
+        cam_list = []
+        nested_solution = [solution[i:i + 3] for i in range(0, len(solution), 3)]
+        #defining list for whole generation
+        gen_fitness = []
 
-#GA parameters
-num_generations = 100
-num_parents_mating = 500
+        for i in range(len(cam_list)):
+            cam = cam_list[i]
+            bpy.context.scene.camera = cam
+            #print('Active camera set to ' + cam.name)
+            cam_loc = cam.location
+            cam_rot = cam.rotation_euler
+            cam_roty = cam_rot[2]
+            pi = math.pi
+            rad = (pi / 180.0)
+            #print(solution,type(solution))
 
-fitness_function = fitness_func
+            cam_x = nested_solution[i][0]
+            cam_y = nested_solution[i][1]
+            cam_z = nested_solution[i][2]
+            cam_rot_x = nested_solution[i][3]
+            cam_rot_y = nested_solution[i][4]
+            cam_rot_z = nested_solution[i][5]
 
-sol_per_pop = 1000
-num_genes = len(function_inputs)
+            config = list([cam_rot_x, cam_rot_y, cam_rot_z, cam_x, cam_y, cam_z])
+            #
+            setupCamera(scene=scene, c=config)
+            # voxel_cal
+            context = bpy.context
+            scene = context.scene
+            #
+            half_normals = CameraCone(cam, scene)
+            girds = grids
+            #
+            inview_co = in_cam(girds, cam, half_normals)
+            fitness = len(inview_co)
+            print("cam,fitness",cam.name,fitness)
+            #
+            gen_fitness.append(fitness)
+        #using cam average
+        fitness = sum(gen_fitness)/len(gen_fitness)
+        return fitness
 
-parent_selection_type = "rank"
-keep_parents = 250
+    num_generations = 100
+    num_parents_mating = 500
 
-crossover_type = "single_point"
-crossover_probability = 0.9
+    fitness_function = fitness_func
 
-mutation_type = "random"
-mutation_probability = 0.1
+    sol_per_pop = 1000
+    num_genes = len(function_inputs)
 
-stop_criteria = "reach_1.0", "saturate_20"
-gene_space = [x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size] #x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size,x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size]
-#initiate GA
-ga_instance = pygad.GA(num_generations=num_generations,
-                       num_parents_mating=num_parents_mating,
-                       fitness_func=fitness_function,
-                       sol_per_pop=sol_per_pop,
-                       num_genes=num_genes,
-                       parent_selection_type=parent_selection_type,
-                       keep_parents=keep_parents,
-                       crossover_type=crossover_type,
-                       crossover_probability = crossover_probability,
-                       mutation_type=mutation_type,
-                       mutation_by_replacement= True,
-                       mutation_probability = mutation_probability,
-                       gene_space = gene_space,
-                       allow_duplicate_genes = True,
-                       gene_type=int,
-                       stop_criteria=stop_criteria)
+    parent_selection_type = "rank"
+    keep_parents = 250
 
-#initiate pop
-ga_instance.initialize_population(low=0,high=360,mutation_by_replacement=True, allow_duplicate_genes = True, gene_type=int)
-bpy_pop = ga_instance.population
-print("init_pop=",bpy_pop)
-'''
-'''
-fitness = fitness_func(img_rgb=img_rgb,solution_idx=0)
-print(fitness)
-'''
-'''
-#perform mutation and crossover ops
-# Running the GA to optimize the parameters of the function.
-ga_instance.run()
-print("Number of generations passed is {generations_completed}".format(generations_completed=ga_instance.generations_completed))
-ga_instance.plot_fitness()
+    crossover_type = "single_point"
+    crossover_probability = 0.9
 
-# Returning the details of the best solution.
-solution, solution_fitness, solution_idx = ga_instance.best_solution(ga_instance.last_generation_fitness)
+    mutation_type = "random"
+    mutation_probability = 0.1
+
+    stop_criteria = "reach_1.0", "saturate_20"
+    gene_space = [x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size] #x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size,x_size,y_size,z_size,rot_x_size,rot_y_size,rot_z_size]
+    #initiate GA
+    ga_instance = pygad.GA(num_generations=num_generations,
+                           num_parents_mating=num_parents_mating,
+                           fitness_func=fitness_function,
+                           sol_per_pop=sol_per_pop,
+                           num_genes=num_genes,
+                           parent_selection_type=parent_selection_type,
+                           keep_parents=keep_parents,
+                           crossover_type=crossover_type,
+                           crossover_probability = crossover_probability,
+                           mutation_type=mutation_type,
+                           mutation_by_replacement= True,
+                           mutation_probability = mutation_probability,
+                           gene_space = gene_space,
+                           allow_duplicate_genes = True,
+                           gene_type=int,
+                           stop_criteria=stop_criteria)
+
+    #initiate pop
+    ga_instance.initialize_population(low=0,high=360,mutation_by_replacement=True, allow_duplicate_genes = True, gene_type=int)
+    bpy_pop = ga_instance.population
+    print("init_pop=",bpy_pop)
+
+    #perform mutation and crossover ops
+    # Running the GA to optimize the parameters of the function.
+    ga_instance.run()
+    print("Number of generations passed is {generations_completed}".format(generations_completed=ga_instance.generations_completed))
+    ga_instance.plot_fitness()
+
+    # Returning the details of the best solution.
+    solution, solution_fitness, solution_idx = ga_instance.best_solution(ga_instance.last_generation_fitness)
 
 best_sol = solution
-'''
+
 cam_list = []
 
 for obj in bpy.data.objects:
@@ -308,7 +314,7 @@ for i in range(len(cam_list)):
     cam = cam_list[i]
     bpy.context.scene.camera = cam
     print('Active camera set to ' + cam.name)
-    '''
+
     cam_loc = cam.location
     cam_rot = cam.rotation_euler
     cam_roty = cam_rot[2]
@@ -327,7 +333,7 @@ for i in range(len(cam_list)):
     print(config)
     #
     setupCamera(scene=scene, c=config)
-    '''
+
     #
     half_normals = CameraCone(cam, scene)
     girds = grids
@@ -335,95 +341,14 @@ for i in range(len(cam_list)):
     # inPTZview_co = inPTZcam_frustum(girds, cam, half_normals)
     # in360view_co = in360cam_frustum(girds,cam,15)
     inlidar_frustum(girds, cam, 30, 5)
-'''
-print("Parameters of the best solution : {solution}".format(solution=solution))
-print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-print("Index of the best solution : {solution_idx}".format(solution_idx=solution_idx))
-
-print("--- %s seconds ---" % (time.time() - start_time))
-'''
-# evalute fitness
-# perform mutation
-'''
-matched_num = len(inview_co)
-        coverage = int(100 * (matched_num / expected_num))
-        print("coverage,i,sol_idx=",coverage,i,solution_idx)
-        output = coverage
-        print("output,desired_output=",output,desired_output)
-        fitness = np.abs(output/desired_output)/1.0
-        print("cam,fitness",cam.name,fitness)
-        gen_fitness.append(fitness)
-
-save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Renders/GA_test"
-        os.makedirs(save_path, exist_ok=True)
-        bpy.context.scene.render.image_settings.file_format = 'PNG'
-        filename = cam.name + "_" + str(solution_idx) + "_" + str(i) + ".png"
-        bpy.context.scene.render.filepath = os.path.join(save_path,(filename))
-        read_path = bpy.context.scene.render.filepath
-        bpy.ops.render.render(use_viewport=True, write_still=True)
-        print("saved as", cam.name, read_path)
-
-        ##Color analysis
-        path = read_path
-        img = cv.imread(path)
-        img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-        ######
-        rgb_count = []
-        all_rgb_codes = img.reshape(-1, img.shape[-1])
-        unique_rgb, counts = np.unique(all_rgb_codes, return_counts=True, axis=0)
-        unique_rgb = unique_rgb.tolist()
-#store and rank
-# encode dict as JSON
-data = json.dumps(bpy_pop, indent=1, ensure_ascii=True)
-
-# set output path and file name (set your own)
-save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/"
-os.makedirs(save_path, exist_ok=True)
-file_name = os.path.join(save_path, "bpy_pop.json")
-
-# write JSON file
-with open(file_name, 'w') as outfile:
-    outfile.write(data + '\n')
-
-dir = os.path.dirname(bpy.data.filepath)
-if not dir in sys.path:
-    sys.path.append(dir)
-    print(sys.path)
-
-path = os.path.abspath("C:/Users/User/anaconda3/envs/BlenderShellDev/Lib/site-packages")
-if path not in sys.path:
-    sys.path.append(path)
-    print('appended')
-
-path = os.path.abspath("C:/Users/User/anaconda3/envs/BlenderShellDev/Lib/site-packages")
-if path not in sys.path:
-    sys.path.append(path)
-    print('appended')
 
 
-    # calculate objective function
-    cv_img = []
-    for img in sorted(
-            glob.glob("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Renders/GA_test/*.png")):
-        n = cv.imread(img)
-        cv_img.append(n)
 
-    img_rgb = []
-    for img in cv_img:
-        cvt = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-        img_rgb.append(cvt)
 
-    coverage_list = []
+if __name__ == "__main__":
+    print("Parameters of the best solution : {solution}".format(solution=solution))
+    print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+    print("Index of the best solution : {solution_idx}".format(solution_idx=solution_idx))
 
-    for img in img_rgb:
-        rgb_count = []
-        all_rgb_codes = img.reshape(-1, img.shape[-1])
-        unique_rgb, counts = np.unique(all_rgb_codes, return_counts=True, axis=0)
-        unique_rgb = unique_rgb.tolist()
-        # print(list(counts),sol_idx)
-        matched_num = len(unique_rgb)
-        print(matched_num)
-        coverage = int(100 * (matched_num / expected_num))
-        coverage_list.append(coverage)
-'''
-print("done")
+    print("--- %s seconds ---" % (time.time() - start_time))
+    print("done")
