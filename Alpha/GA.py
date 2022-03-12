@@ -1,31 +1,233 @@
 import sys
 import os
 import pygad
-import bpy
 import numpy as np
 import time
 import math
-start_time = time.time()
-from mathutils import Vector
-from mathutils.bvhtree import BVHTree
 import open3d as o3d
 
-# open the file in the write mode
-save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct"
-os.makedirs(save_path, exist_ok=True)
-file_name = os.path.join(save_path, "filtered_grids.npy")
-grids = np.load(file_name)
-print(grids)
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
 
-co_list = []
-for index, item in enumerate(grids):
-    co_list.append(index)
+def CameraCone(cam_config):
+    fov = cam_config[0][1]
+    resolution = cam_config[0][2]
+    resolution_x, resolution_y = resolution
+    fx = resolution_x / np.tan(fov / 2)
+    fy = fx*9/16
+    s=0
+    cam_intrinsic = np.array([[fx,s,resolution_x/2],
+                              [0,fy,resolution_x/2],
+                              [0,0,1]])
+    w = fx/resolution_x
+    if resolution_x > resolution_y:
+        x = w
+        y = w * resolution_y / resolution_x
+    else:
+        x = w * resolution_x / resolution_y
+        y = w
 
-#convert to KDtree
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(grids)
-pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+    lr = np.array([x, -y, -1])
+    ur = np.array([x, y, -1])
+    ll = np.array([-x, -y, -1])
+    ul = np.array([-x, y, -1])
 
+    half_plane_normals = [
+        normalize(np.cross(lr, ll)),
+        normalize(np.cross(ll, ul)),
+        normalize(np.cross(ul, ur)),
+        normalize(np.cross(ur, lr))
+    ]
+
+    return half_plane_normals
+
+def isVisible(dir, half_plane_normals, fudge=0):
+    dir = normalize(dir)
+    for norm in half_plane_normals:
+        z2 = dir.dot(norm)
+        if z2 < -fudge:
+            return False
+    return True
+
+def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_cast, half_plane_normals):
+    cam_far = cam_config[0][0]
+    in_view = []
+    queries = []
+    ##get in radius points
+    loc = location_list[location_index]
+    [k, idx, _] = model_kdtree.search_radius_vector_3d(loc, cam_far)
+    model_pcd = model_pcd.select_by_index(idx)
+
+    ##vector from cam to point and normalize
+    for pt in model_pcd.points:
+        dir = pt - loc
+        if isVisible(dir, half_plane_normals, fudge=0):
+            query = [pt, loc - pt]
+            query = np.concatenate(query, dtype=np.float32).ravel().tolist()
+            queries.append(query)
+            print(queries)
+
+    rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
+
+    if ray_cast == 1:
+        hits = scene.test_occlusions(rays)
+
+        for index, item in enumerate(hits):
+            if item:
+                pass
+            else:
+                in_view.append(index)
+
+    model_pcd = model_pcd.select_by_index(in_view)
+    o3d.visualization.draw_geometries([model_pcd])
+    return model_pcd
+
+##computes 360 camera voxels, set ray_cast=0 to turn off, 1 for on##
+def in360cam_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_cast):
+    cam_far = cam_config[1][0]
+    in_view = []
+    queries = []
+    ##get in radius points
+    loc = location_list[location_index]
+    [k, idx, _] = model_kdtree.search_radius_vector_3d(loc, cam_far)
+    model_pcd = model_pcd.select_by_index(idx)
+
+    ##vector from cam to point and normalize
+    for pt in model_pcd.points:
+        query = [pt, loc - pt]
+        query = np.concatenate(query, dtype=np.float32).ravel().tolist()
+        queries.append(query)
+
+    rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
+
+    if ray_cast == 1:
+        #query = [in_range, loc - in_range]
+        #query = np.concatenate(query,dtype=np.float32).ravel().tolist()
+        #ray = o3d.core.Tensor([query],dtype=o3d.core.Dtype.Float32)
+        hits = scene.test_occlusions(rays)
+
+        for index,item in enumerate(hits):
+            if item:
+                pass
+            else:
+                in_view.append(index)
+
+    model_pcd = model_pcd.select_by_index(in_view)
+
+    return model_pcd
+
+def inlidar_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_cast):
+    cam_far = cam_config[2][0]
+    lidar_fov = cam_config[2][1]
+    fov_vec = np.sin(np.radians(lidar_fov))
+
+    in_view = []
+    queries = []
+    ##get in radius points
+    loc = location_list[location_index]
+    [k, idx, _] = model_kdtree.search_radius_vector_3d(loc, cam_far)
+    model_pcd = model_pcd.select_by_index(idx)
+
+    ##vector from cam to point and normalize
+    for pt in model_pcd.points:
+        dir_vec = pt - loc
+        norm = normalize(dir_vec)
+
+        if norm[2] <= fov_vec and norm[2] >= -fov_vec:
+            query = [pt, -dir_vec]
+            query = np.concatenate(query, dtype=np.float32).ravel().tolist()
+            queries.append(query)
+
+    rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
+
+    if ray_cast == 1:
+        # query = [in_range, loc - in_range]
+        # query = np.concatenate(query,dtype=np.float32).ravel().tolist()
+        # ray = o3d.core.Tensor([query],dtype=o3d.core.Dtype.Float32)
+        hits = scene.test_occlusions(rays)
+
+        for index, item in enumerate(hits):
+            if item:
+                pass
+            else:
+                in_view.append(index)
+
+    model_pcd = model_pcd.select_by_index(in_view)
+
+    return model_pcd
+
+if __name__ == "__main__":
+    # open mesh model for raycasting
+    save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
+    os.makedirs(save_path, exist_ok=True)
+    file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
+    model_mesh = o3d.io.read_triangle_mesh(file_name)
+
+    # open filtered voxels
+    save_path1 = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct/"
+    os.makedirs(save_path1, exist_ok=True)
+    model = os.path.join(save_path1, "filtered.ply")
+    model_pcd = o3d.io.read_point_cloud(model)
+    ##save kdtree for computation
+    model_kdtree = o3d.geometry.KDTreeFlann(model_pcd)
+    ##save points for iteration
+    model_pts = model_pcd.points
+    model_pts = np.asarray(model_pts)
+
+    # open camera_postions
+    '''
+    save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
+    os.makedirs(save_path, exist_ok=True)
+    file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
+    model = o3d.io.read_triangle_mesh(file_name)
+    '''
+    # initializing raycast scene
+    scene = o3d.t.geometry.RaycastingScene()
+    cube_id = scene.add_triangles(np.asarray(model_mesh.vertices, dtype=np.float32),
+                                  np.asarray(model_mesh.triangles, dtype=np.uint32))
+    ##cam_config = [PTZ,360,LiDar]
+    ##cam_config = [[cam_far,cam_FOV][cam_far][cam_far, cam_FOV]]
+    cam_config = [[100,118,[1920,1080]], [100.], [100.]]
+
+    x_size = []
+    y_size = []
+    z_size = []
+    co_size = []
+
+    for x in range(0, 600, 10):
+        # if x >= 2500 or x <= :
+        x_size.append(x)
+
+    for y in range(0, 400, 10):
+        # if y >= 500 or y >= 1500:
+        y_size.append(y)
+
+    for z in range(2):
+        # if y >= 500 or y >= 1500:
+        z_size.append(z)
+
+    nx = np.array(x_size,dtype=np.float64)
+    ny = np.array(y_size,dtype=np.float64)
+    nz = np.array(z_size,dtype=np.float64)
+    location_list = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
+
+    for i in range(len(location_list)):
+        co_size.append(i)
+
+    print(location_list,len(location_list))
+    location_index = 0
+    start_time = time.perf_counter()
+    #in_view, idx = in360cam_frustum(model_pcd, model_kdtree,location_index, cam_config, 1)
+    half_plane_normals = CameraCone(cam_config)
+    inPTZcam_frustum(model_pcd, model_kdtree ,location_index, cam_config, 1, half_plane_normals)
+    duration = time.perf_counter() - start_time
+    #print(idx,duration,len(in_view),len(in_view)/idx)
+
+
+'''
 # prepare fitness
 x_size = []
 y_size = []
@@ -71,63 +273,11 @@ for cam in range(cam_num):
 desired_output = 100  # Function output.
 expected_num = 999
 
-
-def setupCamera(scene, c):
-    pi = math.pi
-    scene.camera.rotation_euler = [0, 0, 0]
-    scene.camera.rotation_euler[0] = c[0] * (pi / 180.0)
-    scene.camera.rotation_euler[1] = c[1] * (pi / 180.0)
-    scene.camera.rotation_euler[2] = c[2] * (pi / 180.0)
-
-    scene.camera.location.x = c[3]
-    scene.camera.location.y = c[4]
-    scene.camera.location.z = c[5]
-
-    return
-
 def normalize(v):
     norm = np.linalg.norm(v)
     if norm == 0:
         return v
     return v / norm
-
-
-def CameraCone(cam, scn):
-    matrix = cam.matrix_world
-    matrix = matrix.inverted()
-    sensor_width = cam.data.sensor_width
-    lens = cam.data.lens
-    resolution_x = scn.render.resolution_x
-    resolution_y = scn.render.resolution_y
-
-    w = 0.5 * sensor_width / lens
-    if resolution_x > resolution_y:
-        x = w
-        y = w * resolution_y / resolution_x
-    else:
-        x = w * resolution_x / resolution_y
-        y = w
-
-    lr = Vector([x, -y, -1])
-    ur = Vector([x, y, -1])
-    ll = Vector([-x, -y, -1])
-    ul = Vector([-x, y, -1])
-    half_plane_normals = [
-        lr.cross(ll).normalized(),
-        ll.cross(ul).normalized(),
-        ul.cross(ur).normalized(),
-        ur.cross(lr).normalized()
-    ]
-    return half_plane_normals
-
-
-def isVisible(cam_mat, half_plane_normals, loc, fudge=0):
-    loc2 = cam_mat @ loc
-    for norm in half_plane_normals:
-        z2 = loc2.dot(norm)
-        if z2 < -fudge:
-            return False
-    return True
 
 
 def inPTZcam_frustum(voxel_co, cam, half):
@@ -143,57 +293,9 @@ def inPTZcam_frustum(voxel_co, cam, half):
     return in_view
 
 
-def in360cam_frustum(voxel_co, cam, cam_far):
-    in_view = []
-    for co in voxel_co:
-        co = Vector(co)
-        loc = cam.location
-        dst = np.sqrt((co[0] - loc.x) ** 2 + (co[1] - loc.y) ** 2 + (co[1] - loc.z) ** 2)
-        if dst <= cam_far:
-            in_view.append(co)
-            bpy.ops.mesh.primitive_cube_add(size=5, location=co)
-            bpy.context.object.display_type = 'BOUNDS'
-            # my_coll.objects.link(obj)
-    # print(type(in_view), len(in_view))
-    return in_view
 
-def inlidar_frustum(voxel_co, cam, cam_far, lidar_fov):
-    in_view = []
-    fov_vec = np.sin(np.radians(lidar_fov))
 
-    bpy.context.context.objects.active = cam
-    bpy.ops.object.mode_set(mode='OBJECT')
-    print(bpy.context.mode)
 
-    # cam_BVHT = BVHTree.FromObject(cam, bpy.context.evaluated_depsgraph_get())
-
-    for co in voxel_co:
-        co = Vector(co)
-        loc = cam.location
-        dst = np.sqrt((co[0] - loc.x) ** 2 + (co[1] - loc.y) ** 2 + (co[1] - loc.z) ** 2)
-
-        v3 = loc - co
-        norm = normalize(v3)
-
-        if dst <= cam_far:
-            if norm[2] <= fov_vec and norm[2] >= -fov_vec:
-                local_cam = cam.matrix_world.inverted()  # @ cam.location
-                local_voxel = cam.matrix_world.inverted()  # @ co
-                dir = local_voxel - local_cam
-                print(local_cam, dir)
-                # location, normal, index, dist = cam_BVHT.ray_cast(local_cam, dir, dst)
-                # (location, normal, index) = cam.ray_cast(local_cam, local_voxel)
-                # print(location, normal, index, dist)
-                # print(-fov_vec,"<=",norm[2],"<=",fov_vec)
-
-                # if (location == None):
-                #    in_view.append(co)
-                #    bpy.ops.mesh.primitive_cube_add(size=2, location=location)
-                #    bpy.context.object.display_type = 'BOUNDS'
-                #    #my_coll.objects.link(obj)
-
-    # print(type(in_view), len(in_view))
-    return in_view
 
 def GA_optimiztion(co_list,):
     # sol = (installable_list[index], pan, tilt)
@@ -351,4 +453,5 @@ if __name__ == "__main__":
     print("Index of the best solution : {solution_idx}".format(solution_idx=solution_idx))
 
     print("--- %s seconds ---" % (time.time() - start_time))
-    print("done")
+
+'''
