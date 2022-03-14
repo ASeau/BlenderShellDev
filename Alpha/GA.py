@@ -12,77 +12,126 @@ def normalize(v):
         return v
     return v / norm
 
-def CameraCone(cam_config):
-    fov = cam_config[0][1]
-    resolution = cam_config[0][2]
-    resolution_x, resolution_y = resolution
-    fx = resolution_x / np.tan(fov / 2)
-    fy = fx*9/16
-    s=0
-    cam_intrinsic = np.array([[fx,s,resolution_x/2],
-                              [0,fy,resolution_x/2],
-                              [0,0,1]])
-    w = fx/resolution_x
-    if resolution_x > resolution_y:
-        x = w
-        y = w * resolution_y / resolution_x
-    else:
-        x = w * resolution_x / resolution_y
-        y = w
-
-    lr = np.array([x, -y, -1])
-    ur = np.array([x, y, -1])
-    ll = np.array([-x, -y, -1])
-    ul = np.array([-x, y, -1])
-
-    half_plane_normals = [
-        normalize(np.cross(lr, ll)),
-        normalize(np.cross(ll, ul)),
-        normalize(np.cross(ul, ur)),
-        normalize(np.cross(ur, lr))
-    ]
-
-    return half_plane_normals
-
-def isVisible(dir, half_plane_normals, fudge=0):
-    dir = normalize(dir)
+def isVisible(cam_inv_matrix, half_plane_normals, voxel_co, fudge=0):
+    #voxel_co = normalize(voxel_co)
+    #making coordinates homogeneous
+    hvoxel_co = np.append(voxel_co,[1.])
+    #print(hvoxel_co)
+    transformed_co = cam_inv_matrix @ hvoxel_co
+    transformed_co = transformed_co[:-1]
+    #print(transformed_co)
+    #check for in_view coordinates
     for norm in half_plane_normals:
-        z2 = dir.dot(norm)
+        z2 = np.dot(transformed_co, norm)
         if z2 < -fudge:
             return False
-    return True
+        else:
+            return True
 
-def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_cast, half_plane_normals):
+def cam_intrinsic_extrinsic(cam_co,x_angle,y_angle,z_angle,cam_config):
+    def CameraCone(cam_config):
+        fov = cam_config[0][1]
+        resolution = cam_config[0][2]
+        resolution_x, resolution_y = resolution
+        fx = resolution_x / np.tan(fov / 2)
+        fy = fx * 9 / 16
+        s = 0
+        cam_intrinsic = np.array([[fx, s, resolution_x / 2],
+                                  [0, fy, resolution_x / 2],
+                                  [0, 0, 1]])
+        w = fx / resolution_x
+        if resolution_x > resolution_y:
+            x = w
+            y = w * resolution_y / resolution_x
+        else:
+            x = w * resolution_x / resolution_y
+            y = w
+
+        lr = np.array([x, -y, -1])
+        ur = np.array([x, y, -1])
+        ll = np.array([-x, -y, -1])
+        ul = np.array([-x, y, -1])
+
+        half_plane_normals = [
+            normalize(np.cross(lr, ll)),
+            normalize(np.cross(ll, ul)),
+            normalize(np.cross(ul, ur)),
+            normalize(np.cross(ur, lr))
+        ]
+        print(half_plane_normals)
+        return half_plane_normals
+
+    def CameraMatrix(cam_co,x_angle,y_angle,z_angle):
+        #translation array
+        translate_array = np.array([cam_co[0],cam_co[1],cam_co[2]])
+        add_row = np.array([0,0,0,1])
+        #Rotation matrix = Rz*Ry*Rx
+        x_angle = np.radians(x_angle)
+        y_angle = np.radians(y_angle)
+        z_angle = np.radians(z_angle)
+        #yaw
+        Rz = np.array([[np.cos(z_angle),-np.sin(z_angle),0],
+                       [np.sin(z_angle),np.cos(z_angle),0],
+                       [0,0,1]])
+        #pitch
+        Ry = np.array([[np.cos(y_angle), 0 ,np.sin(y_angle)],
+                       [0,1,0],
+                       [-np.sin(y_angle), 0, np.cos(y_angle)]])
+        #roll
+        Rx = np.array([[1,0,0],
+                       [0, np.cos(x_angle), -np.sin(x_angle)],
+                       [0, np.sin(x_angle), np.cos(x_angle)]])
+
+        cam_matrix = np.matmul(np.matmul(Rz,Ry),Rx)
+        cam_matrix = np.c_[cam_matrix, translate_array]
+        cam_matrix = np.r_[cam_matrix, [add_row]]
+        cam_matrix = np.linalg.inv(cam_matrix)
+        return cam_matrix
+
+    half_plane_normals = CameraCone(cam_config)
+    cam_matrix = CameraMatrix(cam_co,x_angle,y_angle,z_angle)
+
+    return half_plane_normals, cam_matrix
+
+def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_config, ray_cast):
     cam_far = cam_config[0][0]
+    loc = location_list[location_index]
+
+    #test case
+    cam_dir = np.array([90, 0, 135])#dir_list[dir_index]
+    cam_co = np.array([0, 0, 10])
+
+    half_plane_normals, cam_inv_matrix = cam_intrinsic_extrinsic(cam_co,
+                                                                 cam_dir[0],
+                                                                 cam_dir[1],
+                                                                 cam_dir[2],
+                                                                 cam_config)
     in_view = []
     queries = []
+    index_list = []
     ##get in radius points
-    loc = location_list[location_index]
-    [k, idx, _] = model_kdtree.search_radius_vector_3d(loc, cam_far)
+    [k, idx, _] = model_kdtree.search_radius_vector_3d(cam_co, cam_far)
     model_pcd = model_pcd.select_by_index(idx)
 
     ##vector from cam to point and normalize
-    for pt in model_pcd.points:
-        dir = pt - loc
-        if isVisible(dir, half_plane_normals, fudge=0):
-            query = [pt, loc - pt]
+    for index, pt in enumerate(model_pcd.points):
+        if isVisible(cam_inv_matrix, half_plane_normals, pt, fudge=0):
+            query = [pt, cam_co - pt]
             query = np.concatenate(query, dtype=np.float32).ravel().tolist()
             queries.append(query)
-            print(queries)
+            index_list.append(index)
 
     rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
-
     if ray_cast == 1:
         hits = scene.test_occlusions(rays)
-
         for index, item in enumerate(hits):
             if item:
                 pass
             else:
-                in_view.append(index)
+                in_view.append(index_list[index])
 
     model_pcd = model_pcd.select_by_index(in_view)
-    o3d.visualization.draw_geometries([model_pcd])
+    o3d.visualization.draw_geometries([model_pcd,model_mesh])
     return model_pcd
 
 ##computes 360 camera voxels, set ray_cast=0 to turn off, 1 for on##
@@ -116,7 +165,7 @@ def in360cam_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_ca
                 in_view.append(index)
 
     model_pcd = model_pcd.select_by_index(in_view)
-
+    o3d.visualization.draw_geometries([model_pcd])
     return model_pcd
 
 def inlidar_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_cast):
@@ -165,7 +214,7 @@ if __name__ == "__main__":
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
     model_mesh = o3d.io.read_triangle_mesh(file_name)
-
+    #o3d.visualization.draw_geometries([model_mesh])
     # open filtered voxels
     save_path1 = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct/"
     os.makedirs(save_path1, exist_ok=True)
@@ -190,7 +239,7 @@ if __name__ == "__main__":
                                   np.asarray(model_mesh.triangles, dtype=np.uint32))
     ##cam_config = [PTZ,360,LiDar]
     ##cam_config = [[cam_far,cam_FOV][cam_far][cam_far, cam_FOV]]
-    cam_config = [[100,118,[1920,1080]], [100.], [100.]]
+    cam_config = [[100,30,[1920,1080]], [100.], [100.]]
 
     x_size = []
     y_size = []
@@ -213,16 +262,16 @@ if __name__ == "__main__":
     ny = np.array(y_size,dtype=np.float64)
     nz = np.array(z_size,dtype=np.float64)
     location_list = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
-
     for i in range(len(location_list)):
         co_size.append(i)
 
     print(location_list,len(location_list))
     location_index = 0
+    dir_index = 0
     start_time = time.perf_counter()
     #in_view, idx = in360cam_frustum(model_pcd, model_kdtree,location_index, cam_config, 1)
-    half_plane_normals = CameraCone(cam_config)
-    inPTZcam_frustum(model_pcd, model_kdtree ,location_index, cam_config, 1, half_plane_normals)
+    inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_config, 1)
+    #in360cam_frustum(model_pcd,model_kdtree,location_index,cam_config,1)
     duration = time.perf_counter() - start_time
     #print(idx,duration,len(in_view),len(in_view)/idx)
 
