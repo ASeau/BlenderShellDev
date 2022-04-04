@@ -13,23 +13,24 @@ def normalize(v):
         return v
     return v / norm
 
-def isVisible(cam_matrix, half_plane_normals, voxel_co, fudge=0):
-    #voxel_co = normalize(voxel_co)
-    #making coordinates homogeneous
-    hvoxel_co = np.append(voxel_co,[1.])
-    #print(hvoxel_co)
-    cam_inv_matrix = np.linalg.inv(cam_matrix)
-    transformed_co = cam_inv_matrix @ hvoxel_co
-    transformed_co = transformed_co[:-1]
-    #print(transformed_co)
-    #check for in_view coordinates
-    for norm in half_plane_normals:
-        z2 = np.dot(transformed_co, norm)
-        if z2 < -fudge:
-            return False
-        else:
-            return True
-
+def isVisible(cam_co, half_plane_normals, voxel_co, fudge=0):
+    lef = np.dot(voxel_co - cam_co, half_plane_normals[0])
+    bot = np.dot(voxel_co - cam_co, half_plane_normals[1])
+    rig = np.dot(voxel_co - cam_co, half_plane_normals[2])
+    top = np.dot(voxel_co - cam_co, half_plane_normals[3])
+    if lef < - fudge and bot < - fudge and rig < - fudge and top < - fudge:
+        return True
+'''
+#voxel_co = normalize(voxel_co)
+#making coordinates homogeneous
+hvoxel_co = np.append(voxel_co,[1.])
+#print(hvoxel_co)
+cam_inv_matrix = np.linalg.inv(cam_matrix)
+transformed_co = cam_inv_matrix @ hvoxel_co
+transformed_co = transformed_co[:-1]
+#print(transformed_co)
+#check for in_view coordinates
+'''
 def setup_cam(cam_co,x_angle,y_angle,z_angle,cam_config):
     def CameraCone(cam_config):
         fov = 118 #cam_config[0][1]
@@ -42,7 +43,6 @@ def setup_cam(cam_co,x_angle,y_angle,z_angle,cam_config):
 
         return intrinsic
 
-    ##Convert to quaternion based method
     def CameraMatrix():
         #translation array
         translate_array = np.array([0,0,0])
@@ -84,20 +84,23 @@ def setup_cam(cam_co,x_angle,y_angle,z_angle,cam_config):
 
     def half_plane_cal(frustum_mesh):
         points = np.asarray(frustum_mesh.vertices)
-        print(points[1])
-        x, y, z = points[1]
-        lr = np.array([z-2, -y, x])
-        ur = np.array([z-2, y, x])
-        ll = np.array([z-2, -y, x])
-        ul = np.array([z-2, y, x])
+        print('frustum_end_points',points)
+        ul = np.array(points[1]-points[0])
+        ll = np.array(points[4]-points[0])
+        lr = np.array(points[3]-points[0])
+        ur = np.array(np.array(points[2]-points[0]))
 
         half_plane_normals = [
-            normalize(np.cross(lr, ll)),
-            normalize(np.cross(ll, ul)),
-            normalize(np.cross(ul, ur)),
-            normalize(np.cross(ur, lr))
+            # left
+            normalize(np.cross(ul, ll)),
+            # bottom
+            normalize(np.cross(ll, lr)),
+            # right
+            normalize(np.cross(lr, ur)),
+            # top
+            normalize(np.cross(ur, ul))
         ]
-        print(half_plane_normals)
+        print('half:left,bott,right,top',half_plane_normals)
         return half_plane_normals
 
     intrinsic = CameraCone(cam_config)
@@ -120,7 +123,7 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
     # z = 90
     # tilt =0,90:horizontal,180
     # pan = 0@world_x_axis,90@world_y_axis
-    cam_dir = np.array([90,90,0])#dir_list[dir_index] #CV coordinate: x right, y down, z forward
+    cam_dir = np.array([90,135,0])#dir_list[dir_index] #CV coordinate: x right, y down, z forward
     cam_co = np.array([0, 0, 2])
 
     half_plane_normals, frustum, cam_matrix, rot_mat, normal = setup_cam(cam_co,
@@ -129,7 +132,7 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
                                                                  cam_dir[2],
                                                                  cam_config)
 
-    def frustum_cropping(frustum_mesh,model_pcd):
+    def frustum_cropping(frustum_mesh, model_pcd):
         points = np.asarray(frustum_mesh.vertices)
         # Convert the corners array to have type float64
         bounding_polygon_y = points.astype("float64")
@@ -148,7 +151,7 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
 
         # Set all the Y values to 0 (they aren't needed since we specified what they
         # should be using just vol.axis_max and vol.axis_min).
-        #bounding_polygon_y[:, 1] = 0
+        bounding_polygon_y[:, 1] = 0
 
         # Convert the np.array to a Vector3dVector
         vol_y.bounding_polygon = o3d.utility.Vector3dVector(bounding_polygon_y)
@@ -157,32 +160,6 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
         cropped_y_pcd = vol_y.crop_point_cloud(model_pcd)
         #bounding_box = cropped_pcd.get_axis_aligned_bounding_box()
         #bounding_box.color = (1, 0, 0)
-        '''
-        # Crop by X axis
-        bounding_polygon_x = points.astype("float64")
-        # Create a SelectionPolygonVolume
-        vol_x = o3d.visualization.SelectionPolygonVolume()
-
-        # You need to specify what axis to orient the polygon to.
-        # I choose the "Y" axis. I made the max value the maximum Y of
-        # the polygon vertices and the min value the minimum Y of the
-        # polygon vertices.
-        vol_x.orthogonal_axis = "X"
-        vol_x.axis_max = np.max(bounding_polygon_x[:, 1])
-        vol_x.axis_min = np.min(bounding_polygon_x[:, 1])
-
-        # Set all the Y values to 0 (they aren't needed since we specified what they
-        # should be using just vol.axis_max and vol.axis_min).
-        bounding_polygon_x[:, 1] = 0
-
-        # Convert the np.array to a Vector3dVector
-        vol_x.bounding_polygon = o3d.utility.Vector3dVector(bounding_polygon_x)
-
-        # Crop the point cloud using the Vector3dVector
-        cropped_pcd = vol_x.crop_point_cloud(cropped_y_pcd)
-        # bounding_box = cropped_pcd.get_axis_aligned_bounding_box()
-        # bounding_box.color = (1, 0, 0)
-        '''
         return cropped_y_pcd
 
     '''
@@ -205,22 +182,35 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
     lineset.colors = o3d.utility.Vector3dVector(colors)
     '''
     in_view = []
+    is_visible = []
     queries = []
     index_list = []
     ##get in radius points
     [k, idx, _] = model_kdtree.search_radius_vector_3d(cam_co, cam_far)
     model_pcd = model_pcd.select_by_index(idx)
-    cropped_pcd= frustum_cropping(frustum, model_pcd)
 
+    cropped_pcd = frustum_cropping(frustum, model_pcd)
+
+    for index, pt in enumerate(model_pcd.points):
+        if isVisible(cam_co,half_plane_normals,pt):
+            #print(f'{pt}_is_visible')
+            is_visible.append(index)
+
+    model_pcd = model_pcd.select_by_index(is_visible)
+    print(len(is_visible))
     ##vector from cam to point and normalize
-    for index, pt in enumerate(cropped_pcd.points):
+    for index, pt in enumerate(model_pcd.points):
         #if isVisible(cam_matrix, half_plane_normals, pt, fudge=0):
         query = [pt, cam_co - pt]
         query = np.concatenate(query, dtype=np.float32).ravel().tolist()
         queries.append(query)
         index_list.append(index)
 
+    print(len(queries))
+    print(len(index_list))
     rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
+    #print(rays)
+
     if ray_cast == 1:
         if len(rays) > 0:
             hits = scene.test_occlusions(rays)
@@ -233,7 +223,7 @@ def inPTZcam_frustum(model_pcd, model_kdtree ,location_index, dir_index, cam_con
             for item, index in enumerate(index_list):
                 in_view.append(item)
 
-    cropped_pcd = cropped_pcd.select_by_index(in_view)
+    cropped_pcd = model_pcd.select_by_index(in_view)
     #frustum = o3d.geometry.LineSet.create_camera_visualization(intrinsic,cam_matrix,1)
 
     o3d.visualization.draw_geometries([model_mesh, cropped_pcd, frustum, normal])
