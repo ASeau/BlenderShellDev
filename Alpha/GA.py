@@ -27,6 +27,7 @@ def setup_cam(cam_co,x_angle,y_angle,z_angle,cam_config):
         resolution = cam_config[0][2]
         resolution_x, resolution_y = resolution
         fx = resolution_x / np.tan(fov / 2)
+        print('fx=',fx)
         fy = fx * 9 / 16
         intrinsic = o3d.camera.PinholeCameraIntrinsic()
         intrinsic.set_intrinsics(1920,1080,fx,fx,1920/2,1080/2)
@@ -296,16 +297,16 @@ def read_cam_locations(path):
 if __name__ == "__main__":
     # File IO
     # open mesh model for raycasting
-    save_path = "/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    #save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
+    #save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
+    save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
     model_mesh = o3d.io.read_triangle_mesh(file_name)
     #o3d.visualization.draw_geometries([model_mesh])
 
     # open filtered voxels
-    save_path1 = "/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    #save_path1 = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct/"
+    #save_path1 = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
+    save_path1 = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct/"
     os.makedirs(save_path1, exist_ok=True)
     model = os.path.join(save_path1, "filtered.ply")
     model_pcd = o3d.io.read_point_cloud(model)
@@ -316,8 +317,8 @@ if __name__ == "__main__":
     model_pts = np.asarray(model_pts)
 
     # open camera_postions
-    save_path1 = "/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    #save_path1 = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/present/"
+    #save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
+    save_path1 = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/present/"
     os.makedirs(save_path1, exist_ok=True)
     camera = os.path.join(save_path1, "camera_points_pcd.ply")
     location_pcd, location_list, location_index = read_cam_locations(camera)

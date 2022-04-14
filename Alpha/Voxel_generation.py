@@ -98,7 +98,7 @@ def voxelcoor_cal(voxel_size):
     z_length = abs(max_co[2]-min_co[2])
     print(x_length,y_length,z_length)
 
-    step = voxel_size/2
+    step = voxel_size
     print(step)
 
     x = int(x_length/step)
@@ -127,7 +127,7 @@ def voxelcoor_cal(voxel_size):
 
     #print(nx,ny,nz)
     grids = np.vstack(np.meshgrid(nx, ny, nz)).reshape(3, -1).T
-    print(grids, type(grids))
+    print(grids[:10], type(grids))
     print(f'grid of {len(grids)} generated')
 
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -206,8 +206,9 @@ if __name__ == "__main__":
     # Pass numpy array to Open3D.o3d.geometry.PointCloud and visualize
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(grids)
-    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/grids.ply", pcd)
-
+    o3d.io.write_point_cloud("D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/grids.ply", pcd)
+    print('done')
+    '''
     # get filtered grids from open3d mesh2voxel
     bvhtree_1 = join_objects_and_undo()
     f_grids = filter_voxels(grids, bvhtree_1, reso)
@@ -217,12 +218,13 @@ if __name__ == "__main__":
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "filtered_grids.npy")
     np.save(file_name, f_grids)
-
+    
     pcd2 = o3d.geometry.PointCloud()
-    pcd2.points = o3d.utility.Vector3dVector(f_grids)
-    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply",pcd2)
-    print('done')
-
+    pcd2.points = o3d.utility.Vector3dVector(grids)
+    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply",
+                             pcd2)
+    
+    '''
 '''
 
 girds = voxelcoor_cal(1, max_co=max_co, min_co=min_co)

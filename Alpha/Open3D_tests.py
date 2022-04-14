@@ -60,7 +60,7 @@ def subsample_to_voxel_grid(grid,input_ply,voxel_size):
 
     return down_sampled_pts
 
-save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
+save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
 os.makedirs(save_path, exist_ok=True)
 complete_grid = os.path.join(save_path, "grids.ply")
 pcd = o3d.io.read_point_cloud(complete_grid)
@@ -70,15 +70,40 @@ os.makedirs(save_path, exist_ok=True)
 file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
 mesh_ply = o3d.io.read_triangle_mesh(file_name)
 
-pcd.colors = o3d.utility.Vector3dVector(np.random.uniform(0, 1, size=(len(pcd.points), 3)))
+file_name1 = os.path.join(save_path, "filtered.ply")
+filtered_ply = o3d.io.read_point_cloud(file_name1)
 
+#pcd.colors = o3d.utility.Vector3dVector(np.random.uniform(0, 1, size=(len(pcd.points), 3)))
+
+voxel_pt = []
 v_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd,voxel_size=1)
+for voxel in v_grid.get_voxels():
+    pt = v_grid.get_voxel_center_coordinate(voxel.grid_index)
+    voxel_pt.append(pt)
+print('ori=',voxel_pt[:10], np.amin(voxel_pt, axis=0),np.amax(voxel_pt, axis=0))
+
+camera_points_pcd = o3d.geometry.PointCloud()
+camera_points_pcd.points = o3d.utility.Vector3dVector(voxel_pt)
+camera_points_pcd.colors = o3d.utility.Vector3dVector(np.random.uniform(0, 1, size=(len(camera_points_pcd.points), 3)))
+o3d.visualization.draw_geometries([camera_points_pcd, pcd])
+
 #o3d.visualization.draw_geometries([v_grid])
 start_time = time.perf_counter()
+print('starting_voxel_generation')
 model_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(mesh_ply, voxel_size=1)
+voxel_pt = []
+for voxel in model_voxel.get_voxels():
+    pt = model_voxel.get_voxel_center_coordinate(voxel.grid_index)
+    voxel_pt.append(pt)
+print('in_voxel=',voxel_pt[:10], np.amin(voxel_pt, axis=0),np.amax(voxel_pt, axis=0))
+
+camera_points_pcd = o3d.geometry.PointCloud()
+camera_points_pcd.points = o3d.utility.Vector3dVector(voxel_pt)
+camera_points_pcd.colors = o3d.utility.Vector3dVector(np.random.uniform(0, 1, size=(len(camera_points_pcd.points), 3)))
+o3d.io.write_point_cloud(f'D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/voxel_fr_triangle.ply', camera_points_pcd)
 duration = time.perf_counter() - start_time
 print(duration)
-o3d.visualization.draw_geometries([model_voxel])
+o3d.visualization.draw_geometries([camera_points_pcd])#, filtered_ply])
 
 '''
 filtered_pts = []
@@ -95,9 +120,6 @@ o3d.visualization.draw_geometries([camera_points_pcd])
 
 filtered_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(camera_points_pcd,voxel_size=1)
 o3d.visualization.draw_geometries([filtered_grid])
-
-
-
 
 mesh = o3d.io.read_triangle_mesh(file_name)
 #o3d.visualization.draw_geometries([mesh])
