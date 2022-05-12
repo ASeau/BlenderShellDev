@@ -66,7 +66,6 @@ complete_grid = os.path.join(save_path, "grids.ply")
 pcd = o3d.io.read_point_cloud(complete_grid)
 
 save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
-os.makedirs(save_path, exist_ok=True)
 file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
 mesh_ply = o3d.io.read_triangle_mesh(file_name)
 
