@@ -461,7 +461,8 @@ if __name__ == "__main__":
     # File IO
     # open mesh model for raycasting
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
+    save_path = os.path.dirname(os.path.realpath(sys.argv[ 0 ]))
+    #save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
     os.makedirs(save_path, exist_ok=True)
     file_name = os.path.join(save_path, "renwen_raycasting_test.ply")
     model_mesh = o3d.io.read_triangle_mesh(file_name)
@@ -469,9 +470,7 @@ if __name__ == "__main__":
 
     # open filtered voxels
     # save_path1 = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    save_path1 = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/correct/"
-    os.makedirs(save_path1, exist_ok=True)
-    model = os.path.join(save_path1, "filtered.ply")
+    model = os.path.join(save_path, "filtered_test.ply")
     model_pcd = o3d.io.read_point_cloud(model)
     ##save kdtree for computation
     model_kdtree = o3d.geometry.KDTreeFlann(model_pcd)
@@ -481,9 +480,7 @@ if __name__ == "__main__":
 
     # open camera_postions
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    save_path1 = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/present/"
-    os.makedirs(save_path1, exist_ok=True)
-    camera = os.path.join(save_path1, "camera_points_pcd.ply")
+    camera = os.path.join(save_path, "camera_points_pcd.ply")
     location_pcd, location_list, location_index = read_cam_locations(camera)
 
     # initializing raycast scene
