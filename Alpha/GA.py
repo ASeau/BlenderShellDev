@@ -5,7 +5,11 @@ import numpy as np
 import time
 import math
 import open3d as o3d
-import copy
+import json
+#import concurrent.futures
+from multiprocessing import Pool
+import random
+from deap import creator, base, tools, algorithms
 
 def normalize(v):
     norm = np.linalg.norm(v)
@@ -13,15 +17,25 @@ def normalize(v):
         return v
     return v / norm
 
-
-def isVisible(cam_co, half_plane_normals, voxel_co, fudge=0):
-    lef = np.dot(voxel_co - cam_co, half_plane_normals[ 0 ])
-    bot = np.dot(voxel_co - cam_co, half_plane_normals[ 1 ])
-    rig = np.dot(voxel_co - cam_co, half_plane_normals[ 2 ])
-    top = np.dot(voxel_co - cam_co, half_plane_normals[ 3 ])
-    if lef < - fudge and bot < - fudge and rig < - fudge and top < - fudge:
-        return True
-
+def isVisible(cam_co, half_plane_normals, voxel_co, fudge=0.0001):
+    vec = voxel_co - cam_co
+    front = -1 * np.dot(vec, half_plane_normals[ 0 ])
+    if front < - fudge:
+        lef = np.dot(vec, half_plane_normals[ 1 ])
+        bot = np.dot(vec, half_plane_normals[ 2 ])
+        rig = np.dot(vec, half_plane_normals[ 3 ])
+        top = np.dot(vec, half_plane_normals[ 4 ])
+        if lef < - fudge and bot < - fudge and rig < - fudge and top < - fudge:
+            return True
+    else:
+        return False
+    '''
+    for norm in half_plane_normals:
+        z2 = np.dot(vec,norm)
+        if z2 < -fudge:
+            return True
+    return False
+    '''
 
 def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
 
@@ -64,7 +78,7 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
         resolution = cam_config[ 0 ][ 2 ]
         resolution_x, resolution_y = resolution
         fx = resolution_x / np.tan(fov / 2)
-        print('fx=', fx)
+        #print('fx=', fx)
         fy = fx * 9 / 16
         intrinsic = o3d.camera.PinholeCameraIntrinsic()
         intrinsic.set_intrinsics(1920, 1080, fx, fx, 1920 / 2, 1080 / 2)
@@ -82,7 +96,7 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
 
         cam_matrix = np.c_[ matrix, translate_array ]
         cam_matrix = np.r_[ cam_matrix, [ add_row ] ]
-        print("cam_matrix=", cam_matrix)
+        #print("cam_matrix=", cam_matrix)
         return cam_matrix
 
     def frustum_calculation(intrinsic, cam_matrix, cam_far):
@@ -125,7 +139,7 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
         frustum_mesh.rotate(rot_mat_y, center=co)
         # frustum_mesh.translate(co)
         #frustum_mesh = rotated + frustum_mesh
-        print(rot_mat_x)
+        #print(rot_mat_x)
 
         # frustum_mesh.rotate(rot_mat_y,center=[0,0,0])
         # print(rot_mat_y)
@@ -133,13 +147,17 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
 
     def half_plane_cal(frustum_mesh):
         points = np.asarray(frustum_mesh.vertices)
-        print('frustum_end_points', points)
+        #print('frustum_end_points', points)
+        uf = np.array(points[ 2 ] - points[ 1 ])
+        lf = np.array(points[ 4 ] - points[ 1 ])
         ul = np.array(points[ 1 ] - points[ 0 ])
         ll = np.array(points[ 4 ] - points[ 0 ])
         lr = np.array(points[ 3 ] - points[ 0 ])
         ur = np.array(np.array(points[ 2 ] - points[ 0 ]))
 
         half_plane_normals = [
+            # front
+            normalize(np.cross(uf, lf)),
             # left
             normalize(np.cross(ul, ll)),
             # bottom
@@ -149,7 +167,7 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
             # top
             normalize(np.cross(ur, ul))
         ]
-        print('half:left,bott,right,top', half_plane_normals)
+        #print('half:left,bott,right,top', half_plane_normals)
         return half_plane_normals
 
     intrinsic = CameraCone(cam_config)
@@ -167,15 +185,16 @@ def setup_cam(cam_co, x_angle, y_angle, z_angle, cam_config):
     return half_plane_normals, frustum, pcd #cam_matrix, rot_mat, pcd
 
 
-def inPTZcam_frustum(model_pcd, model_kdtree, location_index, dir_index, cam_config, ray_cast):
+def inPTZcam_frustum(model_pcd, model_kdtree, scene, location_list,
+                     location_index, dir_index, cam_config, ray_cast):
     cam_far = cam_config[ 0 ][ 0 ]
     # test case
     # z = 90
     # tilt =0,90:horizontal,180
     # pan = 0@world_x_axis,90@world_y_axis  # dir_list[dir_index] #CV coordinate: x right, y down, z forward
     cam_co = np.asarray(location_list[ location_index ])
-    print('cam_co=', cam_co)
-    print('cam_dir=', )
+    #print('cam_co=', cam_co)
+    #print('cam_dir=', )
     half_plane_normals, frustum, normal= setup_cam(cam_co,
                                                                          dir_index[ 0 ],
                                                                          dir_index[ 1 ],
@@ -228,7 +247,7 @@ def inPTZcam_frustum(model_pcd, model_kdtree, location_index, dir_index, cam_con
             is_visible.append(index)
 
     model_pcd = model_pcd.select_by_index(is_visible)
-    print(len(is_visible))
+    #print(len(is_visible))
     ##vector from cam to point and normalize
     for index, pt in enumerate(model_pcd.points):
         # if isVisible(cam_matrix, half_plane_normals, pt, fudge=0):
@@ -237,8 +256,8 @@ def inPTZcam_frustum(model_pcd, model_kdtree, location_index, dir_index, cam_con
         queries.append(query)
         index_list.append(index)
 
-    print(len(queries))
-    print(len(index_list))
+    #print(len(queries))
+    #print(len(index_list))
     rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
     # print(rays)
 
@@ -251,10 +270,13 @@ def inPTZcam_frustum(model_pcd, model_kdtree, location_index, dir_index, cam_con
                 else:
                     in_view.append(index_list[ index ])
         else:
-            for item, index in enumerate(index_list):
-                in_view.append(item)
+            for index, item in enumerate(index_list):
+                in_view.append(index_list[ index ])
 
-    cropped_pcd = model_pcd.select_by_index(in_view)
+    if ray_cast == 1:
+        cropped_pcd = model_pcd.select_by_index(in_view)
+    else:
+        cropped_pcd = model_pcd
     # frustum = o3d.geometry.LineSet.create_camera_visualization(intrinsic,cam_matrix,1)
     frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0,0,0])
     #o3d.visualization.draw_geometries([ model_mesh, cropped_pcd, frustum, normal, location_pcd, frame])
@@ -298,15 +320,55 @@ def in360cam_frustum(model_pcd, model_kdtree ,location_index, cam_config, ray_ca
 
     return model_pcd
 
-def read_cam_locations(path):
+def read_cam_locations(path, write_file):
     location_pcd = o3d.io.read_point_cloud(path)
     location_list = np.array(location_pcd.points)
     location_index = [ i for i, _ in enumerate(location_list) ]
+
+    if write_file == 1:
+        loc_index_dict = {}
+        print(location_list)
+        for index, co in enumerate(location_index):
+            tmp =  dict(zip([str(location_list[index])],[index]))
+            loc_index_dict.update(tmp)
+        with open('file_name.json', 'w', encoding='utf-8') as f:
+            json.dump(loc_index_dict, f, ensure_ascii=False, indent=4)
+        print('json created')
+
     if len(location_list) != len(location_index):
         raise Exception('location length and index length is different')
+
     return location_pcd, location_list, location_index
 
-def GA_optimiztion(cam_num,cam_config):
+# print(function_inputs)
+# sol = (installable_list[index], pan, tilt)
+
+
+def GA_optimiztion(cam_num,cam_config,location_list, location_index,
+                   phase_list, kdtree_list, scene_list, model_mesh_list):
+
+    start_time = time.perf_counter()
+
+    num_generations = 100 #65
+    num_parents_mating = 95 #
+    sol_per_pop = 100 #250
+    parent_selection_type = "tournament"
+    keep_parents = 5
+    '''
+    num_generations = 1
+    num_parents_mating = 2
+    sol_per_pop = 2
+    parent_selection_type = "rank"
+    keep_parents = 1
+    '''
+    crossover_type = "uniform"
+    crossover_probability = 0.9 #0.9
+    mutation_type = "random" #"random"
+    # [probabilty if high,probability if low]
+    mutation_probability = 0.1 #[ 0.8, 0.2 ] #0.05
+    score_discount = 1.0
+    saturate_gen = 100
+    stop_criteria = [ f'reach_{score_discount * 100}', f'saturate_{saturate_gen}' ]
     """
     (z,)
     Convert an Euler angle to a quaternion.
@@ -327,11 +389,12 @@ def GA_optimiztion(cam_num,cam_config):
     camera_type_size = {'low': 0, 'high': 0}  # len(cam_config)}
     # installable locations
     camera_location_size = {'low': 0, 'high': len(location_index)}
+
     # installable angles
     rot_x = 0
-    rot_x_size = {'low': 5, 'high': 180}
+    rot_x_size = range(45,135,15)#{'low': 5, 'high': 90}
     rot_y = 0
-    rot_y_size = {'low': 5, 'high': 360}
+    rot_y_size = range(30,360,30)#{'low': 5, 'high': 360}
 
     function_inputs = [ ]
     function_inputs_ele = [ cam_type, location_index, rot_x, rot_y ]
@@ -339,87 +402,121 @@ def GA_optimiztion(cam_num,cam_config):
     for cam in range(cam_num):
         function_inputs.extend(function_inputs_ele)  # Function inputs
 
-    # print(function_inputs)
-    # sol = (installable_list[index], pan, tilt)
-    def result_visualization(solution, cam_num):
-        print(solution)
-        nested_solution = [ solution[ i:i + 4 ] for i in range(0, len(solution), 4) ]
-        in_view_list = [ ]
-        in_view_frustums = [ ]
-
-        for i in range(cam_num):
-            id = nested_solution[ i ][ 0 ]
-            index = nested_solution[ i ][ 1 ]
-            rot_x = nested_solution[ i ][ 2 ]
-            rot_y = nested_solution[ i ][ 3 ]
-            rot_list = np.asarray([ rot_x, rot_y, 0 ])
-            print('rot_list==',rot_list)
-
-            if id == 0:
-                in_view, frustum = inPTZcam_frustum(model_pcd, model_kdtree, index, rot_list, cam_config, 1)
-                in_view_list.append(in_view)
-                in_view_frustums.append(frustum)
-
-            elif id == 1:
-                in_view_360 = in360cam_frustum(model_pcd, model_kdtree, index, cam_config, 1)
-                in_view_list.append(in_view_360)
-
-        draw_list = [pcd for pcd in in_view_list]
-        draw_list += [frustums for frustums in in_view_frustums]
-        draw_list.append(model_mesh)
-        draw_list.append(location_pcd)
-        o3d.visualization.draw_geometries(draw_list)
-        return
-
+    initial = [ 0, 7, 90, 225, 0, 93, 90, 180, 0, 150, 90, 0, 0, 223, 90, 0 ]
+    #flatlist = [ element for sublist in initial for element in sublist ]
+    population = [ initial ] * sol_per_pop
     def result_export2blender(solution):
 
         return
 
-    def fitness_func(solution, solution_idx):
-        print(solution)
+    def result_visualization(solution, cam_num):
+        print('starting_visualization')
+        print('solution==[cam_type,index,x,y]', solution)
+        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+        print('solution==[cam_type,index,x,y]', solution)
         total_score = len(np.asarray(model_pcd.points))
-        print(total_score)
+        print('expected_score is', total_score)
+
         nested_solution = [ solution[ i:i + 4 ] for i in range(0, len(solution), 4) ]
         in_view_list = [ ]
-
+        in_view_frustums = [ ]
+        fitness_list = [ ]
         for i in range(cam_num):
             id = nested_solution[ i ][ 0 ]
             index = nested_solution[ i ][ 1 ]
             rot_x = nested_solution[ i ][ 2 ]
             rot_y = nested_solution[ i ][ 3 ]
             rot_list = np.asarray([ rot_x, rot_y, 0 ])
-            print('rot_list==',rot_list)
+            print('rot_list==[x,y,z]', rot_list)
 
-            if id == 0:
-                in_view, frustum = inPTZcam_frustum(model_pcd, model_kdtree, index, rot_list, cam_config, 1)
-                in_view_list.append(in_view)
+            for countt, phase in enumerate(phase_list):
+                if id == 0:
+                    in_view, frustum = inPTZcam_frustum(phase, kdtree_list[countt], scene_list[countt],
+                                                        location_list, index, rot_list, cam_config,
+                                                        1)
+                    score = len(np.asarray(in_view.points))
+                    total = len(np.asarray(phase.points))
+                    fitness_list.append(score/total)
+                    in_view_list.append(in_view)
 
-            elif id == 1:
-                in_view_360 = in360cam_frustum(model_pcd, model_kdtree, index, cam_config, 1)
-                in_view_list.append(in_view_360)
+                    in_view_frustums.append(frustum)
+
+                elif id == 1:
+                    in_view_360 = in360cam_frustum(model_pcd, model_kdtree, index, cam_config, 1)
+                    in_view_list.append(in_view_360)
+
+        draw_list = [ pcd for pcd in in_view_list ]
 
         fitness = 0
+        for index, item in enumerate(fitness_list):
+            print(f'phase{index}_score:', item)
+
+        all_fitness = np.sum(fitness_list)/len(phase_list)
+        print('all_phases = fitness_solution:', all_fitness)
+
+        draw_list += [frustums for frustums in in_view_frustums]
+        draw_list.append(model_mesh_list[-1])
+        draw_list.append(location_pcd)
+        o3d.visualization.draw_geometries(draw_list)
+
+        # camera_points_pcd = o3d.geometry.PointCloud()
+        # camera_points_pcd.points = o3d.utility.Vector3dVector(draw_list)
+        # o3d.io.write_point_cloud(f'./{solution}_{cam_num}.ply',camera_points_pcd)
+        return
+
+    def fitness_func(solution, solution_idx):
+        phase_fitness = [ ]
+        for count, phase in enumerate(phase_list):
+            in_view_list = [ ]
+            print('starting phase:',count)
+            print('solution==[cam_type,index,x,y]',solution)
+            total_score = len(np.asarray(phase.points))
+            print('expected_score is',total_score)
+            nested_solution = [ solution[ i:i + 4 ] for i in range(0, len(solution), 4) ]
+
+            # Introduce multiprocessing
+            for i in range(cam_num):
+                id = nested_solution[ i ][ 0 ]
+                index = nested_solution[ i ][ 1 ]
+                rot_x = nested_solution[ i ][ 2 ]
+                rot_y = nested_solution[ i ][ 3 ]
+                rot_list = np.asarray([ rot_x, rot_y, 0 ])
+
+                if id == 0:
+                    in_view, frustum = inPTZcam_frustum(phase, kdtree_list[count], scene_list[count],
+                                                        location_list, index, rot_list, cam_config, 1)
+                    in_view_list.append(len(np.asarray(in_view.points)))
+
+            phase_fitness.append(100 * sum(in_view_list)/total_score)
+            print('solution & fitness=', solution, '&', phase_fitness[count], '%', int((phase_fitness[count] / 100) * total_score))
+        fitness = sum(phase_fitness)/len(phase_list)
+        print('all_phases, solution & fitness=', solution, '&', fitness)
+        #fitness = int(fitness)
+        #print('rounded_fitness', fitness)
+        '''
         # 04/11 note: add color_info into calculation
-        for pcd in in_view_list:
-            fitness += len(np.asarray(pcd.points))/ total_score
-        print('solution & fitness=',solution,'&',fitness)
+        for index, pcd in enumerate(in_view_list):
+            camera_percentage = len(np.asarray(pcd.points))/ total_score
+            if camera_percentage >= 0.01:
+                fitness = fitness + len(np.asarray(pcd.points))/ total_score
+            else:
+                break
+            print(index, 'individual solution & fitness=', solution, '&', len(np.asarray(pcd.points)), '&', fitness)
+        '''
+        #fitness = 100 * fitness/len(in_view_list)
+        #print('averaged_fitness',fitness)
+        duration = time.perf_counter() - start_time
+        print('time used so far:',duration)
         print('*' * 150)
+
         return fitness
 
-    num_generations = 2
-    num_parents_mating = 5
     fitness_function = fitness_func
-    sol_per_pop = 10
     num_genes = len(function_inputs)
-    parent_selection_type = "rank"
-    keep_parents = 2
-    crossover_type = "single_point"
-    crossover_probability = 0.9
-    mutation_type = "random"
-    mutation_probability = 0.1
-    stop_criteria = "saturate_20"
+
     gene_space = [ ]
     gene = [ camera_type_size, camera_location_size, rot_x_size, rot_y_size]
+    print('gene_setup:', gene)
     for cam in range(cam_num):
         gene_space.extend(gene)
 
@@ -427,6 +524,7 @@ def GA_optimiztion(cam_num,cam_config):
     ga_instance = pygad.GA(num_generations=num_generations,
                            num_parents_mating=num_parents_mating,
                            fitness_func=fitness_function,
+                           initial_population= population,
                            sol_per_pop=sol_per_pop,
                            num_genes=num_genes,
                            parent_selection_type=parent_selection_type,
@@ -437,9 +535,11 @@ def GA_optimiztion(cam_num,cam_config):
                            mutation_by_replacement=True,
                            mutation_probability=mutation_probability,
                            gene_space=gene_space,
-                           allow_duplicate_genes=True,
+                           allow_duplicate_genes=False,
                            gene_type=int,
-                           stop_criteria=stop_criteria)
+                           stop_criteria=stop_criteria,
+                           save_best_solutions= True)
+
 
     # perform mutation and crossover ops
     # Running the GA to optimize the parameters of the function.
@@ -449,53 +549,187 @@ def GA_optimiztion(cam_num,cam_config):
     ga_instance.plot_fitness()
 
     # Returning the details of the best solution.
-    solution, solution_fitness, solution_idx = ga_instance.best_solution(ga_instance.last_generation_fitness)
+    best = np.sort(ga_instance.best_solutions_fitness)
+    print('best_sol=',best)
+    print(ga_instance.last_generation_fitness)
+    #entrance,office,fence,renwen
+    #[  0 7 150 180   0  93  150 0   0 150  150 180   0 223 150 0]
+    solution, solution_fitness, solution_idx = ga_instance.best_solution(best)
 
-    result_visualization(solution, cam_num)
+    #solution = [  0, 7, 90, 225,   0,  93,  90, 180,   0, 150,  90, 0,   0, 223, 90, 0]
+
+    result_visualization(solution,cam_num)
 
     return solution, solution_fitness
 
-# Preparing
+# DEAP Implementation
+def DEAP(cam_num,cam_config):
 
+    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("Individual", list, fitness=creator.FitnessMax)
+    toolbox = base.Toolbox()
+    # Structure initializers
+    # gene
+    toolbox.register("attr_bool", random.randint, 0, 1)
+    # gene space
+    toolbox.register("individual", tools.initRepeat, creator.Individual,
+                     toolbox.attr_bool, 100)
+    #
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+    def fitness_func(solution, solution_idx):
+        print('solution==[cam_type,index,x,y]',solution)
+        total_score = len(np.asarray(model_pcd.points))
+        print('expected_score is',total_score)
+        nested_solution = [ solution[ i:i + 4 ] for i in range(0, len(solution), 4) ]
+        in_view_list = [ ]
+
+        camera_params = []
+        # Introduce multiprocessing
+        for i in range(cam_num):
+            id = nested_solution[ i ][ 0 ]
+            index = nested_solution[ i ][ 1 ]
+            rot_x = nested_solution[ i ][ 2 ]
+            rot_y = nested_solution[ i ][ 3 ]
+            rot_list = np.asarray([ rot_x, rot_y, 0 ])
+
+            if id == 0:
+                in_view, frustum = inPTZcam_frustum(model_pcd, model_kdtree, location_list, index, rot_list, cam_config, 1)
+                in_view_list.append(in_view)
+
+        fitness = 0
+        # 04/11 note: add color_info into calculation
+        for pcd in in_view_list:
+            fitness = fitness + len(np.asarray(pcd.points))/ total_score
+            print('solution & fitness=',solution,'&',len(np.asarray(pcd.points)),'&',fitness)
+        #duration = time.perf_counter() - start_time
+        print('time used so far:',duration)
+        print('*' * 150)
+
+        return fitness
+    toolbox.register("evaluate", fitness_func)
+    toolbox.register("mate", tools.cxTwoPoint)
+    toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)
+    toolbox.register("select", tools.selTournament, tournsize=3)
+
+    def run():
+        pop = toolbox.population(n=300)
+
+        # Evaluate the entire population
+        fitnesses = list(map(toolbox.evaluate, pop))
+        for ind, fit in zip(pop, fitnesses):
+            ind.fitness.values = fit
+
+        # CXPB  is the probability with which two individuals
+        #       are crossed
+        # MUTPB is the probability for mutating an individual
+        CXPB, MUTPB = 0.5, 0.2
+
+        # Extracting all the fitnesses of
+        fits = [ ind.fitness.values[ 0 ] for ind in pop ]
+        # Variable keeping track of the number of generations
+        g = 0
+
+        # Begin the evolution
+        while max(fits) < 100 and g < 1000:
+            # A new generation
+            g = g + 1
+            print("-- Generation %i --" % g)
+            # Select the next generation individuals
+            offspring = toolbox.select(pop, len(pop))
+            # Clone the selected individuals
+            offspring = list(map(toolbox.clone, offspring))
+
+        # Apply crossover and mutation on the offspring
+        for child1, child2 in zip(offspring[ ::2 ], offspring[ 1::2 ]):
+            if random.random() < CXPB:
+                toolbox.mate(child1, child2)
+                del child1.fitness.values
+                del child2.fitness.values
+
+        for mutant in offspring:
+            if random.random() < MUTPB:
+                toolbox.mutate(mutant)
+                del mutant.fitness.values
+
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ ind for ind in offspring if not ind.fitness.valid ]
+        fitnesses = map(toolbox.evaluate, invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
+
+        pop[ : ] = offspring
+
+        # Gather all the fitnesses in one list and print the stats
+        fits = [ ind.fitness.values[ 0 ] for ind in pop ]
+
+        length = len(pop)
+        mean = sum(fits) / length
+        sum2 = sum(x * x for x in fits)
+        std = abs(sum2 / length - mean ** 2) ** 0.5
+
+        print("  Min %s" % min(fits))
+        print("  Max %s" % max(fits))
+        print("  Avg %s" % mean)
+        print("  Std %s" % std)
+
+# Preparing
 if __name__ == "__main__":
+
+    total_start_time = time.perf_counter()
     # File IO
     # open mesh model for raycasting
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
     save_path = os.path.dirname(os.path.realpath(sys.argv[ 0 ]))
     #save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/"
     os.makedirs(save_path, exist_ok=True)
-    file_name = os.path.join(save_path, "/plys/renwen_raycasting_test.ply")
-    model_mesh = o3d.io.read_triangle_mesh(file_name)
-    # o3d.visualization.draw_geometries([model_mesh])
-
-    # open filtered voxels
-    # save_path1 = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    model = os.path.join(save_path, "/plys/filtered_test.ply")
-    model_pcd = o3d.io.read_point_cloud(model)
-    ##save kdtree for computation
-    model_kdtree = o3d.geometry.KDTreeFlann(model_pcd)
-    ##save points for iteration
-    model_pts = model_pcd.points
-    model_pts = np.asarray(model_pts)
-
+    phase_list = []
+    kdtree_list = []
+    scene_list = []
+    model_mesh_list = []
+    for p in range(1,4,1):
+        file_name = os.path.join(save_path, f'plys/pre_filter/phase_{p}.ply')
+        model_mesh = o3d.io.read_triangle_mesh(file_name)
+        o3d.visualization.draw_geometries([model_mesh])
+        model_mesh_list.append(model_mesh)
+        # initializing raycast scene
+        scene = o3d.t.geometry.RaycastingScene()
+        cube_id = scene.add_triangles(np.asarray(model_mesh.vertices, dtype=np.float32),
+                                      np.asarray(model_mesh.triangles, dtype=np.uint32))
+        scene_list.append(scene)
+        # open filtered voxels
+        model = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/filter_{p}.ply')
+        model_pcd = o3d.io.read_point_cloud(model)
+        phase_list.append(model_pcd)
+        ##save kdtree for computation
+        model_kdtree = o3d.geometry.KDTreeFlann(model_pcd)
+        kdtree_list.append(model_kdtree)
+        '''
+        ##save points for iteration
+        model_pts = model_pcd.points
+        model_pts = np.asarray(model_pts)
+        '''
+    print('phase_count=',len(model_mesh_list),len(phase_list))
     # open camera_postions
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    camera = os.path.join(save_path, "/plys/camera_points_pcd.ply")
-    location_pcd, location_list, location_index = read_cam_locations(camera)
-
-    # initializing raycast scene
-    scene = o3d.t.geometry.RaycastingScene()
-    cube_id = scene.add_triangles(np.asarray(model_mesh.vertices, dtype=np.float32),
-                                  np.asarray(model_mesh.triangles, dtype=np.uint32))
+    camera = os.path.join(save_path, "plys/downsample_5.ply")
+    location_pcd, location_list, location_index = read_cam_locations(camera, 0)
 
     desired_output = 100  # Function output.
     cam_config = [ [ 50., 30, [ 1920, 1080 ] ], [ 100. ] ]
-    for i in range(1,10):
-        solution, solution_fitness = GA_optimiztion(cam_num=i, cam_config=cam_config)
-
-
-
-
+    #for i in range(4,6):
+    solution, solution_fitness = GA_optimiztion(cam_num=4, cam_config=cam_config, location_list=location_list,
+                                                location_index=location_index, phase_list=phase_list,
+                                                kdtree_list=kdtree_list,scene_list=scene_list,
+                                                model_mesh_list= model_mesh_list)
+    duration = time.perf_counter() - total_start_time
+    print(f'time_for{1}cams_op:',duration)
+    '''
+    for i in range(4,6):
+        solution, solution_fitness = GA_optimiztion(cam_num=1, cam_config=cam_config)
+        duration = time.perf_counter() - total_start_time
+        # print(f'time_for{i}cams_op:',duration)
+    '''
 '''
 # change2quad
 

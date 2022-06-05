@@ -2,10 +2,11 @@ import bpy
 import sys
 import os
 import numpy as np
+import bmesh
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 import open3d as o3d
-import pickle
+import datetime
 
 # reset materials
 def material_reset():
@@ -138,15 +139,16 @@ def voxelcoor_cal(voxel_size):
     return grids
 
 def join_objects_and_undo():
+    context = bpy.context
     scene = bpy.context.scene
     depsgraph = bpy.context.evaluated_depsgraph_get()
-
+    '''
     obs = []
     for ob in scene.objects:
         # whatever objects you want to join...
         if ob.type == 'MESH':
             obs.append(ob)
-
+    print(len(obs))
     ctx = bpy.context.copy()
 
     # one of the objects to join
@@ -154,32 +156,74 @@ def join_objects_and_undo():
     ctx['selected_editable_objects'] = obs
     bpy.ops.object.join(ctx)
     print(f'{len(obs)} objects joined')
-
+    '''
+    #context.view_layer.objects.active = context.scene.objects.get('_ncl1_892Mesh')
     tree = []
+    mtx = []
     for obj in scene.objects:
         if obj.type == 'MESH':
-            bvhtree = BVHTree.FromObject(obj, depsgraph, epsilon=0.01)
-            tree.append(bvhtree)
+            bm = bmesh.new()
 
-    print('bvhtree obtained')
+            bpy.context.view_layer.objects.active = obj
+            print(obj.name)
+            bvhtree = BVHTree.FromObject(obj, depsgraph)
+            mtx.append(obj.matrix_world.inverted())
+            '''
+            #mesh = obj.to_mesh(depsgraph,)
+            bm.from_object(obj,depsgraph)
+            bm.transform(obj.matrix_world)
+
+            bvhtree = BVHTree.FromBMesh(bm)
+            #bpy.data.meshes.remove(mesh)
+            
+            mtx.append(obj.matrix_world.inverted())
+            print('name=', obj.name, bpy.context.object.name)
+            bpy.ops.object.mode_set(mode='EDIT')
+            bm = bmesh.from_edit_mesh(obj.data)
+            '''
+            tree.append(bvhtree)#BVHTree.FromBMesh(bm,epsilon=1e5))
+    '''
+    bvhtree = BVHTree.FromObject(obj, depsgraph, epsilon=0.01)
+                tree.append(bvhtree)
+    '''
+    print('bvhtree obtained', tree)
     #bpy.ops.ed.undo()
     print('action undone')
-    return tree[0]
+    #bpy.ops.object.mode_set(mode="OBJECT")
+    return tree[0], mtx[0]
 
-def filter_voxels(grids, bvhtree, reso):
+def filter_voxels(grids, mtx ,bvhtree, reso):
     context = bpy.context
     scene = context.scene
-
     filtered_co = []
     for index, co in enumerate(grids):
-        print(index,"/",len(grids))
-        #lcoation, normal, index, dist =
-        result = bvhtree.find_nearest(co, reso / 2)
-        #print(result)
-        if result[0]:
-            filtered_co.append(co)
-            print(result)
+        #print('mtx',mtx)
+        ray_begin = Vector(co)
 
+        range = 3
+        z = co[2]
+        if z >= 0:
+            z = z - range
+        elif z < 0:
+            z = -z - range
+
+        ray_end = Vector((co[0],co[1],z))
+
+        ray_dir = ray_end - ray_begin
+        #print(ray_end,ray_begin)
+        ray_dir.normalize()
+        local_co = mtx @ ray_begin
+        #print(index,"/",len(grids))
+        #lcoation, normal, index, dist =
+        #donw_vec = mtx @ Vector(np.array([0,0,-1]))
+        loc,nor,idx,dist = bvhtree.ray_cast(local_co,ray_dir,3)
+        #pos, norm, idx, d = bvhtree.find_nearest(local_co, reso)
+        #print(loc, '@', co)
+        #print(result[0])
+        if loc is not None:
+            filtered_co.append(co)
+            #print(result)
+    print('len(filter):',len(filtered_co))
     #print(f'grid of {grids.size} inputed')
 
     fnx = np.array(filtered_co)
@@ -196,35 +240,40 @@ def filter_voxels(grids, bvhtree, reso):
 
 if __name__ == "__main__":
     # material_reset()
+    now = datetime.time
+    print("Starting script, Current Time =", now)
+
     reso = 1
-    grids = voxelcoor_cal(1)
-    save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
+    grids = voxelcoor_cal(reso)
+    '''
+    save_path = "./plys/ori_voxels/"
     os.makedirs(save_path, exist_ok=True)
-    file_name = os.path.join(save_path, "grids.npy")
+    file_name = os.path.join(save_path, f'grids{len(grids)}.npy')
     np.save(file_name, grids)
 
     # Pass numpy array to Open3D.o3d.geometry.PointCloud and visualize
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(grids)
-    o3d.io.write_point_cloud("D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/grids.ply", pcd)
+    o3d.io.write_point_cloud(f'D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/ori_voxels/grid_{len(grids)}.ply', pcd)
     print('done')
     '''
     # get filtered grids from open3d mesh2voxel
-    bvhtree_1 = join_objects_and_undo()
-    f_grids = filter_voxels(grids, bvhtree_1, reso)
+    bvhtree_1, mtx = join_objects_and_undo()
 
-    # open the file in the write mode
-    save_path = "D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/"
-    os.makedirs(save_path, exist_ok=True)
-    file_name = os.path.join(save_path, "filtered_grids.npy")
-    np.save(file_name, f_grids)
-    
-    pcd2 = o3d.geometry.PointCloud()
-    pcd2.points = o3d.utility.Vector3dVector(grids)
-    o3d.io.write_point_cloud("D:/User Data/Documents/Research Ref/Main_research/BlenderShellDev/Alpha/filtered.ply",
-                             pcd2)
-    
+    f_grids = filter_voxels(grids, mtx, bvhtree_1, 1)
     '''
+    # open the file in the write mode
+    save_path = "./plys/ori_voxels/"
+    os.makedirs(save_path, exist_ok=True)
+    file_name = os.path.join(save_path, f'voxel_{f_grids.size}.npy')
+    np.save(file_name, f_grids)
+    '''
+    phase = 2
+    pcd2 = o3d.geometry.PointCloud()
+    pcd2.points = o3d.utility.Vector3dVector(f_grids)
+    o3d.io.write_point_cloud(f'D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/ori_voxels/for_filter/{phase}voxel_{f_grids.size}.ply',
+                             pcd2)
+
 '''
 
 girds = voxelcoor_cal(1, max_co=max_co, min_co=min_co)

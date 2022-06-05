@@ -43,12 +43,12 @@ o3d.visualization.draw_geometries([pcd.to_legacy(),model_pcd],
                                   zoom=1.0)
 
 '''
-def subsample_to_voxel_grid(grid,input_ply,voxel_size):
+def subsample_to_voxel_grid(grid,input_pcd,voxel_size):
     v_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(grid, voxel_size=voxel_size)
-    bool_list = v_grid.check_if_included(input_ply.points)
+    bool_list = v_grid.check_if_included(input_pcd.points)
 
     filtered_voxel = []
-    for pts in input_ply.points:
+    for pts in input_pcd.points:
         index = v_grid.get_voxel(pts)
         new_point = v_grid.get_voxel_center_coordinate(index)
         filtered_voxel.append(new_point)
