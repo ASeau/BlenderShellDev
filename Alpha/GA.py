@@ -10,7 +10,6 @@ import json
 from multiprocessing import Pool
 import random
 import csv
-from deap import creator, base, tools, algorithms
 
 def normalize(v):
     norm = np.linalg.norm(v)
@@ -379,21 +378,21 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
         function_inputs.extend(function_inputs_ele)  # Function inputs
 
     # solution = [  0, 7, 90, 225,   0,  93,  90, 180,   0, 150,  90, 0,   0, 223, 90, 0]
-    initial_1 = [ 0, 7, 45]
-    initial_2 = [ 0, 7, 45, 0, 93, 38]
-    initial_3 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80 ]
-    initial_4 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 ]
-    initial_5 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0]
-    initial_6 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0, 0, 7, 0]
-    initial_7 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0 , 0, 7, 0]
-    initial_8 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ]
-    initial_9 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ]
-    initial_10 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ]
-    initial_11 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0]
-    initial_12 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0]
-    initial_13 = [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0, 0, 7, 0]
+    initial = [[ 0, 7, 45],
+               [ 0, 7, 45, 0, 93, 38],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80 ],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 ],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0, 0, 7, 0],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0 , 0, 7, 0],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0],
+               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0, 0, 7, 0]]
     #flatlist = [ element for sublist in initial for element in sublist ]
-    population = [ initial_4 ] * sol_per_pop
+    population = [ initial[cam_num-1] ] * sol_per_pop
     def result_export2blende4r(solution):
 
         return
@@ -610,13 +609,15 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
     solution_8 = [0, 7, 45, 0, 86, 59, 0, 150, 80, 0, 223, 4, 0, 128, 16, 0, 207, 74, 0, 145, 66, 0, 226, 10]
     solution_10 = [0,	7,	45,	0,	93,	38,	0,	187,	80,	0,	47,	52,	0,	110,	24,	0,	138,	18,	0,	182,	83,	0,	106,	33,	0,	132,	66,	0,	204,	 67]
 
-    sol = [0, 130, 38, 0, 197, 81, 0, 150, 73, 1, 29, 61]
+    #sol = [0, 130, 38, 0, 197, 81, 0, 150, 73, 1, 29, 61]
+    sol = [0	,7	,45	,0	,221	,81	,0	,212	,10	,1	,83	 ,8]
 
     result_visualization(sol,cam_num)
 
     return solution, solution_fitness
 
 # DEAP Implementation
+'''
 def DEAP(cam_num,cam_config):
 
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -726,7 +727,7 @@ def DEAP(cam_num,cam_config):
         print("  Max %s" % max(fits))
         print("  Avg %s" % mean)
         print("  Std %s" % std)
-
+'''
 # Preparing
 if __name__ == "__main__":
 
@@ -776,8 +777,8 @@ if __name__ == "__main__":
         keep_parents = 1
 
         '''
-    test_set = [ 1, 1, 1, 1 ]
-    run_set = [ 100, 9, 10, 1 ]
+    test_set = [ 1, 2, 2, 1 ]
+    run_set = [ 100, 90, 100, 10 ]
     GA_settings = test_set
 
     desired_output = 100  # Function output.
