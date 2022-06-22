@@ -69,7 +69,15 @@ def filter_voxels(camera, bvhtree, mtx ,distance):
     scene = context.scene
     filtered_co = []
     in_range = []
+
+    cam_pts = [[int(co[0]),int(co[1]),int(co[2])] for co in cam_pts]
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(cam_pts)
+    '''
     for index, co in enumerate(cam_pts):
+        
+        
+        
         bpy_co = Vector(co)
         local_co = mtx @ bpy_co
         _, _, _, dist = bvhtree.find_nearest(local_co, distance)
@@ -77,8 +85,8 @@ def filter_voxels(camera, bvhtree, mtx ,distance):
             if dist < distance:
                 print(f'progress:{index/len(cam_pts)}')
                 in_range.append(index)
-
-    return in_range
+    '''
+    return pcd
 
 if __name__ == "__main__":
     # material_reset()
@@ -88,11 +96,14 @@ if __name__ == "__main__":
     os.makedirs(save_path, exist_ok=True)
     cam_path = os.path.join(save_path, "downsample_5.ply")
     camera = o3d.io.read_point_cloud(cam_path)
-    for distance in range(5,30,5):
-        bvhtree, mtx = join_objects_and_undo()
-        in_range = filter_voxels(camera,bvhtree,mtx,distance)
-        print(len(in_range))
-        cropped_pcd = camera.select_by_index(in_range)
-        cam_path = os.path.join(save_path, f'new_camlocsvoxel_{distance}.ply')
-        o3d.io.write_point_cloud(cam_path, cropped_pcd)
+
+    #for distance in range(5,30,5):
+    distance = 1
+    bvhtree, mtx = join_objects_and_undo()
+    in_range = filter_voxels(camera,bvhtree,mtx,distance)
+    #print(len(in_range))
+    #cropped_pcd = camera.select_by_index(in_range)
+    cam_path = os.path.join(save_path, f'cam_loc.ply')
+    o3d.io.write_point_cloud(cam_path, in_range)
+
     #o3d.visualization.draw_geometries([ cropped_pcd ])

@@ -304,7 +304,7 @@ def read_cam_locations(path, write_file):
             loc_index_dict.update(tmp)
         with open('file_name.json', 'w', encoding='utf-8') as f:
             json.dump(loc_index_dict, f, ensure_ascii=False, indent=4)
-        #print('json created')
+        print('json created')
 
     if len(location_list) != len(location_index):
         raise Exception('location length and index length is different')
@@ -351,8 +351,8 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
     # cam_config = [PTZ,360,LiDar]
     # cam_config = [[cam_far,cam_FOV][cam_far][cam_far, cam_FOV]]
 
-    cam_type = 1
-    camera_type_size = range(0,2,1)  # len(cam_config)}
+    cam_type = 0
+    camera_type_size = {'low': 0, 'high': 0}  # len(cam_config)}
     # installable locations
     camera_location_size = {'low': 0, 'high': len(location_index)}
 
@@ -378,19 +378,21 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
         function_inputs.extend(function_inputs_ele)  # Function inputs
 
     # solution = [  0, 7, 90, 225,   0,  93,  90, 180,   0, 150,  90, 0,   0, 223, 90, 0]
-    initial = [[ 0, 7, 45],
-               [ 0, 7, 45, 0, 93, 38],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80 ],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 ],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80 , 0, 7, 0, 0, 7, 0],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0 , 0, 7, 0],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 ],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0],
-               [ 0, 7, 45, 0, 93, 38, 0, 150, 80, 0, 223, 80, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0, 0, 7, 0 , 0, 7, 0, 0, 7, 0, 0, 7, 0]]
+    initial = [[ 0, 6, 45],
+               [ 0, 6, 45, 0, 90, 38],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80 ],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80 ],
+               # pre_installed: 4/
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80 ],
+               #
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80, 0, 8, 45 ],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80, 0, 8, 45, 0, 92, 38],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80, 0, 8, 45, 0, 92, 38, 0, 149, 80 ],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80, 0, 8, 45, 0, 92, 38, 0, 149, 80, 0, 222, 80],
+               [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80, 0, 7, 45, 0, 91, 38, 0, 148, 80, 0, 221, 80, 0, 8, 45, 0, 92, 38, 0, 149, 80, 0, 222, 80, 0, 9, 45 ]]
     #flatlist = [ element for sublist in initial for element in sublist ]
     population = [ initial[cam_num-1] ] * sol_per_pop
     def result_export2blende4r(solution):
@@ -612,7 +614,7 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
     #sol = [0, 130, 38, 0, 197, 81, 0, 150, 73, 1, 29, 61]
     sol = [0	,7	,45	,0	,221	,81	,0	,212	,10	,1	,83	 ,8]
 
-    result_visualization(sol,cam_num)
+    #result_visualization(solution,cam_num)
 
     return solution, solution_fitness
 
@@ -742,8 +744,9 @@ if __name__ == "__main__":
     kdtree_list = []
     scene_list = []
     model_mesh_list = []
-    for p in range(1,4,1):
-        file_name = os.path.join(save_path, f'plys/pre_filter/phase_{p}.ply')
+    for p in range(0,7,1):
+        #triangle_meshes
+        file_name = os.path.join(save_path, f'plys/ori_voxels/for_filter/mesh/phase_{p}.ply')
         model_mesh = o3d.io.read_triangle_mesh(file_name)
         #o3d.visualization.draw_geometries([model_mesh])
         model_mesh_list.append(model_mesh)
@@ -753,7 +756,7 @@ if __name__ == "__main__":
                                       np.asarray(model_mesh.triangles, dtype=np.uint32))
         scene_list.append(scene)
         # open filtered voxels
-        model = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/filter_{p}.ply')
+        model = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/{p}_filtered_vox.ply')
         model_pcd = o3d.io.read_point_cloud(model)
         phase_list.append(model_pcd)
         ##save kdtree for computation
@@ -767,9 +770,11 @@ if __name__ == "__main__":
     #print('phase_count=',len(model_mesh_list),len(phase_list))
     # open camera_postions
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    camera = os.path.join(save_path, "plys/downsample_5.ply")
+    #use new filtered
+    #camera = os.path.join(save_path, "plys/downsample_5.ply")
+    distance = 20
+    camera = os.path.join(save_path, f'plys/ori_voxels/for_filter/cam_loc.ply')
     location_pcd, location_list, location_index = read_cam_locations(camera, 0)
-
     '''
         num_generations = 1
         num_parents_mating = 1
@@ -778,7 +783,7 @@ if __name__ == "__main__":
 
         '''
     test_set = [ 1, 2, 2, 1 ]
-    run_set = [ 100, 90, 100, 10 ]
+    run_set = [ 100, 9, 10, 1 ]
     GA_settings = test_set
 
     desired_output = 100  # Function output.

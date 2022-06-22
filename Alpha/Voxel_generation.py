@@ -195,6 +195,58 @@ def join_objects_and_undo():
 def filter_voxels(grids, mtx ,bvhtree, reso):
     context = bpy.context
     scene = context.scene
+    filtered_co = [ ]
+    for index, co in enumerate(grids):
+        # print('mtx',mtx)
+        ray_begin = Vector(co)
+
+        range = 3
+        z = co[ 2 ]
+        if z >= 0:
+            z = z - range
+        elif z < 0:
+            z = -z - range
+
+        ray_end = Vector((co[ 0 ], co[ 1 ], z))
+
+        ray_dir = ray_end - ray_begin
+        # print(ray_end,ray_begin)
+        ray_dir.normalize()
+        local_co = mtx @ ray_begin
+        # print(index,"/",len(grids))
+        # lcoation, normal, index, dist =
+        # donw_vec = mtx @ Vector(np.array([0,0,-1]))
+        loc, nor, idx, dist = bvhtree.ray_cast(local_co, ray_dir, 3)
+        # pos, norm, idx, d = bvhtree.find_nearest(local_co, reso)
+        # print(loc, '@', co)
+        # print(result[0])
+
+        print('proximity_check:')
+        print(index, "/", len(grids))
+        # lcoation, normal, index, dist =
+
+        #local_co = mtx @ Vector(co)
+        result = bvhtree.find_nearest(local_co, reso / 2)
+
+        if loc is not None or result[0]:
+            filtered_co.append(co)
+
+    print('len(filter):', len(filtered_co))
+    # print(f'grid of {grids.size} inputed')
+
+    fnx = np.array(filtered_co)
+    # fny = np.array(filtered_y)
+    # fnz = np.array(filtered_z)
+
+    # print(nx,ny,nz)
+    fgrids = np.vstack(fnx)  # .reshape(3, -1).T
+
+    print(fgrids, type(fgrids))
+    print(f'filtered_grid of {fgrids.size} generated')
+
+    '''
+    context = bpy.context
+    scene = context.scene
     filtered_co = []
     for index, co in enumerate(grids):
         #print('mtx',mtx)
@@ -235,7 +287,34 @@ def filter_voxels(grids, mtx ,bvhtree, reso):
 
     print(fgrids, type(fgrids))
     print(f'filtered_grid of {fgrids.size} generated')
+    '''
+    '''
+    context = bpy.context
+    scene = context.scene
 
+    filtered_co = []
+    for index, co in enumerate(grids):
+        print(index,"/",len(grids))
+        #lcoation, normal, index, dist =
+        local_co = mtx @ Vector(co)
+        result = bvhtree.find_nearest(local_co, reso / 2)
+        #print(result)
+        if result[0]:
+            filtered_co.append(co)
+            print(result)
+
+    #print(f'grid of {grids.size} inputed')
+
+    fnx = np.array(filtered_co)
+    #fny = np.array(filtered_y)
+    #fnz = np.array(filtered_z)
+
+    # print(nx,ny,nz)
+    fgrids = np.vstack(fnx)#.reshape(3, -1).T
+
+    print(fgrids, type(fgrids))
+    print(f'filtered_grid of {fgrids.size} generated')
+    '''
     return fgrids
 
 if __name__ == "__main__":
@@ -268,10 +347,10 @@ if __name__ == "__main__":
     file_name = os.path.join(save_path, f'voxel_{f_grids.size}.npy')
     np.save(file_name, f_grids)
     '''
-    phase = 2
+    phase = 0
     pcd2 = o3d.geometry.PointCloud()
     pcd2.points = o3d.utility.Vector3dVector(f_grids)
-    o3d.io.write_point_cloud(f'D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/ori_voxels/for_filter/{phase}voxel_{f_grids.size}.ply',
+    o3d.io.write_point_cloud(f'D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/plys/ori_voxels/for_filter/{phase}prefiltervoxel.ply',
                              pcd2)
 
 '''

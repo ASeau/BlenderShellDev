@@ -10,11 +10,17 @@ import json
 from multiprocessing import Pool
 import random
 import csv
-def in360cam_frustum(co, model_pcd, model_kdtree ,scene, ray_cast):
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
 
+def in360cam_frustum(co, model_pcd, model_kdtree ,scene, ray_cast, lidar_fov):
     cam_far = 50
     in_view = []
     queries = []
+    fov_vec = np.sin(np.radians(lidar_fov))
     ##get in radius points
     cam_co = co
     # frustum generation
@@ -25,12 +31,25 @@ def in360cam_frustum(co, model_pcd, model_kdtree ,scene, ray_cast):
     [k, idx, _] = model_kdtree.search_radius_vector_3d(cam_co, cam_far)
     model_pcd = model_pcd.select_by_index(idx)
 
+    index_list = []
     ##vector from cam to point and normalize
-    for pt in model_pcd.points:
+    for index, pt in enumerate(model_pcd.points):
+        height = 22
+        ground = - 0.1
+        if pt[ 2 ] >= ground and pt[ 2 ] <= height:
+            dir_vec = pt - cam_co
+            norm = normalize(dir_vec)
+
+            if norm[ 2 ] <= fov_vec and norm[ 2 ] >= -fov_vec:
+                query = [ pt, -dir_vec ]
+                query = np.concatenate(query, dtype=np.float32).ravel().tolist()
+                queries.append(query)
+                index_list.append(index)
+        '''
         query = [pt, cam_co - pt]
         query = np.concatenate(query, dtype=np.float32).ravel().tolist()
         queries.append(query)
-
+        '''
     rays = o3d.core.Tensor(queries, dtype=o3d.core.Dtype.Float32)
 
     if ray_cast == 1:
@@ -40,7 +59,7 @@ def in360cam_frustum(co, model_pcd, model_kdtree ,scene, ray_cast):
                 if item:
                     pass
                 else:
-                    in_view.append(index)
+                    in_view.append(index_list[ index ])
 
     cropped_pcd = model_pcd.select_by_index(in_view)
     #coor_mesh = o3d.geometry.TriangleMesh.create_coordinate_frame(size=100, origin=[0, 0, 2])
@@ -52,15 +71,15 @@ if __name__ == "__main__":
     save_path = "D:/Program Files (x86)/Blender/2.90/scripts/BlenderShellDev/Alpha/"
     os.makedirs(save_path, exist_ok=True)
     distance = 20
-    cam_path = os.path.join(save_path, f'plys/new_camlocsvoxel_{distance}.ply')
+    cam_path = os.path.join(save_path, f'plys/ori_voxels/for_filter/cam_loc.ply')
     camera = o3d.io.read_point_cloud(cam_path)
     # load
     phase_list = [ ]
     kdtree_list = [ ]
     scene_list = [ ]
     model_mesh_list = [ ]
-    for p in range(1, 4, 1):
-        file_name = os.path.join(save_path, f'plys/pre_filter/phase_{p}.ply')
+    for p in range(0, 7, 1):
+        file_name = os.path.join(save_path, f'plys/ori_voxels/for_filter/mesh/phase_{p}.ply')
         model_mesh = o3d.io.read_triangle_mesh(file_name)
         model_mesh_list.append(model_mesh)
         # initializing raycast scene
@@ -69,7 +88,8 @@ if __name__ == "__main__":
                                       np.asarray(model_mesh.triangles, dtype=np.uint32))
         scene_list.append(scene)
         # open filtered voxels
-        model = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/filter_{p}.ply')
+        model = os.path.join(save_path, f'plys/ori_voxels/for_filter/{p}prefiltervoxel.ply')
+        #model = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/filter_{p}.ply')
         model_pcd = o3d.io.read_point_cloud(model)
         phase_list.append(model_pcd)
         ##save kdtree for computation
@@ -81,10 +101,8 @@ if __name__ == "__main__":
         phase_highest = []
 
         for id, co in enumerate(camera.points):
-            print(co)
-            print(index, id, len(camera.points))
             in_view_pcd, frustum = in360cam_frustum(co, phase_list[index], kdtree_list[index],
-                             scene_list[index], 1 )
+                             scene_list[index], 1 , 80)
             phase_highest.append(in_view_pcd.points)
 
         print('highest:', len(phase_highest))
@@ -96,5 +114,6 @@ if __name__ == "__main__":
         pcd2.points = o3d.utility.Vector3dVector(unique_id)
         #cropped_pcd = phase_list[index].select_by_index(list(unique_id))
         o3d.visualization.draw_geometries([ pcd2, mesh , camera])
-        cam_path = os.path.join(save_path, f'highest_voxel_{len(phase_list[index].points)}_{index+1}_{len(pcd2.points)}.ply')
+        cam_path = os.path.join(save_path, f'plys/ori_voxels/for_filter/presenting/{index}_filtered_vox.ply')
         o3d.io.write_point_cloud(cam_path, pcd2)
+        print(f'{cam_path}:saved')

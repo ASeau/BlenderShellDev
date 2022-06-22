@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # save_path = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
     save_path = os.path.dirname(os.path.realpath(sys.argv[ 0 ]))
     os.makedirs(save_path, exist_ok=True)
-    phase = 3
+    phase = 6
     file_name = os.path.join(save_path, f'plys/pre_filter/phase_{phase}.ply')
     model_mesh = o3d.io.read_triangle_mesh(file_name)
     model_mesh.paint_uniform_color([ 1, 0.706, 0 ])
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     # open filtered voxels
     # save_path1 = "/home/adrain/Desktop/bpydev/BlenderShellDev/Alpha/plys/"
-    id = 153624
+    id = 213183
     model = os.path.join(save_path, f'plys/ori_voxels/for_filter/{phase}voxel_{id}.ply')
     model_pcd = o3d.io.read_point_cloud(model)
     ##save kdtree for computation
