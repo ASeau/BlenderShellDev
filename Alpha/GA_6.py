@@ -783,15 +783,15 @@ if __name__ == "__main__":
 
         '''
     test_set = [ 1, 2, 2, 1 ]
-    run_set = [ 100, 9, 10, 1 ]
-    GA_settings = test_set
+    run_set = [ 1000, 90, 100, 10 ]
+    GA_settings = run_set
 
     desired_output = 100  # Function output.
     # cam_config =[[range., cost, resolution]]
     cam_config = [ [ 50., 700, [ 1920, 1080 ] ], [ 50., 2400] ]
     ori_budget = 2800
     #for i in range(4,6):
-    solution, solution_fitness = GA_optimiztion(cam_num = 4, cam_config=cam_config, location_list=location_list,
+    solution, solution_fitness = GA_optimiztion(cam_num = 6, cam_config=cam_config, location_list=location_list,
                                                 location_index=location_index, phase_list=phase_list,
                                                 kdtree_list=kdtree_list,scene_list=scene_list,
                                                 model_mesh_list= model_mesh_list,
