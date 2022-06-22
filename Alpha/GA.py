@@ -501,46 +501,46 @@ def GA_optimiztion(cam_num,cam_config,location_list, location_index,
 
         #print('network_cost:', network_cost, sum(network_cost))
         fitness = 0.
-        if sum(network_cost) < total_budget:
-            #print('network_cost', sum(network_cost))
-            phase_fitness = [ ]
-            for count, phase in enumerate(phase_list):
-                in_view_list = [ ]
-                in_view_pts = [ ]
-                #print('starting phase:',count)
-                #print('solution==[cam_type,index,x,y]',solution)
-                total_score = len(np.asarray(phase.points))
-                #print('expected_score is',total_score)
-                nested_solution = [ solution[ i:i + 3 ] for i in range(0, len(solution), 3) ]
+        #if sum(network_cost) < total_budget:
+        #print('network_cost', sum(network_cost))
+        phase_fitness = [ ]
+        for count, phase in enumerate(phase_list):
+            in_view_list = [ ]
+            in_view_pts = [ ]
+            #print('starting phase:',count)
+            #print('solution==[cam_type,index,x,y]',solution)
+            total_score = len(np.asarray(phase.points))
+            #print('expected_score is',total_score)
+            nested_solution = [ solution[ i:i + 3 ] for i in range(0, len(solution), 3) ]
 
-                # Introduce multiprocessing
-                for i in range(cam_num):
-                    id = nested_solution[ i ][ 0 ]
-                    loc_index = nested_solution[ i ][ 1 ]
-                    rot_index = nested_solution[ i ][ 2 ]
+            # Introduce multiprocessing
+            for i in range(cam_num):
+                id = nested_solution[ i ][ 0 ]
+                loc_index = nested_solution[ i ][ 1 ]
+                rot_index = nested_solution[ i ][ 2 ]
 
-                    if id == 0:
-                        in_view, frustum = inPTZcam_frustum(phase, kdtree_list[count], scene_list[count],
-                                                            location_list, loc_index, dir_list_size, rot_index,
-                                                            cam_config, 1)
-                        #in_view_list.append(in_view)
+                if id == 0:
+                    in_view, frustum = inPTZcam_frustum(phase, kdtree_list[count], scene_list[count],
+                                                        location_list, loc_index, dir_list_size, rot_index,
+                                                        cam_config, 1)
+                    #in_view_list.append(in_view)
 
-                        in_view_pts.append(np.asarray(in_view.points))
+                    in_view_pts.append(np.asarray(in_view.points))
 
-                    elif id == 1:
-                        in_view, frustum = in360cam_frustum(phase, kdtree_list[count], scene_list[count],
-                                                            location_list, loc_index, cam_config, 1)
-                        in_view_list.append(len(np.asarray(in_view.points)))
+                elif id == 1:
+                    in_view, frustum = in360cam_frustum(phase, kdtree_list[count], scene_list[count],
+                                                        location_list, loc_index, cam_config, 1)
+                    in_view_list.append(len(np.asarray(in_view.points)))
 
-                # duplicate point filter
-                temp_array = np.concatenate(in_view_pts,axis=0)
-                unique_co = np.unique(temp_array,axis=0)
+            # duplicate point filter
+            temp_array = np.concatenate(in_view_pts,axis=0)
+            unique_co = np.unique(temp_array,axis=0)
 
-                phase_fitness.append(100 * len(unique_co)/total_score)
-                #print('solution & fitness=', solution, '&', phase_fitness[count], '%', int((phase_fitness[count] / 100) * total_score))
-            fitness = np.sum(phase_fitness)/len(phase_list)
-            duration = time.perf_counter() - start_time
-            print(int(duration), f'{[x for x in solution]}', fitness, sep = ',')
+            phase_fitness.append(100 * len(unique_co)/total_score)
+            #print('solution & fitness=', solution, '&', phase_fitness[count], '%', int((phase_fitness[count] / 100) * total_score))
+        fitness = np.sum(phase_fitness)/len(phase_list)
+        duration = time.perf_counter() - start_time
+        print(int(duration), f'{[x for x in solution]}', fitness, sep = ',')
         #fitness = int(fitness)
         #print('rounded_fitness', fitness)
         '''
