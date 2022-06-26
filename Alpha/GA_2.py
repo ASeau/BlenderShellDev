@@ -783,7 +783,7 @@ if __name__ == "__main__":
 
         '''
     test_set = [ 1, 2, 2, 1 ]
-    rrun_set = [ 1000, 90, 100, 10 ]
+    run_set = [ 1000, 90, 100, 10 ]
     GA_settings = run_set
 
     desired_output = 100  # Function output.
