@@ -445,7 +445,19 @@ if __name__ == "__main__":
     cam_config = [ [ 50., 18000, [ 1920, 1080 ] ], [ 50., 2400] ]
     ori_budget = 2800
     #for i in range(4,6):
-    solution  = [ 0, 6, 45, 0, 90, 59, 0, 147, 80, 0, 220, 12, 0, 20, 52, 0, 91, 31, 0, 148, 73, 0, 221, 11, 0, 8, 24, 0, 215, 72]
+    solution_1 = [0, 187, 73]
+    solution_2 = [0, 146, 66, 0, 218, 4]
+    solution_3 = [ 0, 6, 45, 0, 147, 66, 0, 3, 80 ]
+    solution_benchmark = [ 0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 80 ]
+    solution_4 = [0, 6, 45, 0, 83, 24, 0, 147, 80, 0, 187, 66]
+    solution_5 = [0, 6, 45, 0, 97, 59, 0, 183, 80, 0, 199, 67, 0, 7, 52]
+    solution_6 = [0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 74, 0, 189, 10, 0, 85, 24]
+    solution_7 = [0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 153, 67, 0, 7, 59, 0, 115, 52, 0, 148, 10]
+    solution_8 = [0, 6, 45, 0, 90, 38, 0, 147, 80, 0, 220, 11, 0, 186, 60, 0, 145, 51, 0, 124, 17, 0, 221, 81]
+    solution_9 = [0, 6, 45, 0, 90, 38, 0, 14, 80, 0, 220, 17, 0, 7, 60, 0, 152, 16, 0, 148, 66, 0, 203, 11, 0, 8, 52]
+    solution_10  = [ 0, 6, 45, 0, 90, 59, 0, 147, 80, 0, 220, 12, 0, 20, 52, 0, 91, 31, 0, 148, 73, 0, 221, 11, 0, 8, 24, 0, 215, 72]
+
+    solution = solution_9
     cam_num = int(len(solution)/3)
     in_view_frustums, in_view_list, all_fitness, draw_list  = result_visualization(solution=solution,cam_num=cam_num)
     '''
@@ -490,7 +502,7 @@ if __name__ == "__main__":
         pcds.append(colored)
 
     draw_list += [pcd for pcd in pcds]
-    o3d.visualization.draw_geometries(draw_list)
+    o3d.visualization.draw_geometries(draw_list,f'{cam_num}_{all_fitness}')
     #voxel_path = os.path.join(save_path, f'plys/results/{cam_num}_{all_fitness}.ply')
     #o3d.io.write_point_cloud(voxel_path, pcd2)
 
